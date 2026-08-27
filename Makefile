@@ -3,7 +3,7 @@ FLUTTER ?= $(shell command -v fvm >/dev/null 2>&1 && echo "fvm flutter" || echo 
 .PHONY: install up-all up-infra run-simulator test lint
 
 install:
-	uv sync
+	uv sync --all-packages
 	cd apps/client && $(FLUTTER) pub get
 
 up-all:
