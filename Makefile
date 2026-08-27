@@ -1,8 +1,10 @@
+FLUTTER ?= $(shell command -v fvm >/dev/null 2>&1 && echo "fvm flutter" || echo "flutter")
+
 .PHONY: install up-all up-infra run-simulator test lint
 
 install:
 	uv sync
-	cd apps/client && fvm flutter pub get
+	cd apps/client && $(FLUTTER) pub get
 
 up-all:
 	docker compose up -d
@@ -15,8 +17,8 @@ run-simulator:
 
 test:
 	uv run pytest
-	cd apps/client && fvm flutter test
+	cd apps/client && $(FLUTTER) test
 
 lint:
 	uv run ruff check .
-	cd apps/client && fvm flutter analyze
+	cd apps/client && $(FLUTTER) analyze
