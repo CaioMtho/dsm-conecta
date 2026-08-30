@@ -7,10 +7,11 @@ install:
 	cd apps/client && $(FLUTTER) pub get
 
 up-all:
-	docker compose up -d
+	docker compose -f deployments/docker-compose.yml up -d
 
 up-infra:
-	docker compose up -d db broker
+	docker compose -f deployments/docker-compose.yml up -d db broker
+
 
 run-simulator:
 	cd apps/simulator && uv run python -m src.main

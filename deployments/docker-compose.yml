@@ -1,0 +1,87 @@
+name: dsm-conecta
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: dsm_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dsm_conecta
+      POSTGRES_USER: dsm_user
+      POSTGRES_PASSWORD: dsm_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dsm_user -d dsm_conecta"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: dsm_broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.gateway
+    container_name: dsm_gateway
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://dsm_user:dsm_password@db:5432/dsm_conecta
+      MQTT_BROKER_HOST: broker
+      MQTT_BROKER_PORT: 1883
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  ingestor:
+    build:
+      context: ..
+      dockerfile: deployments/docker/Dockerfile.ingestor
+    container_name: dsm_ingestor
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://dsm_user:dsm_password@db:5432/dsm_conecta
+      MQTT_BROKER_HOST: broker
+      MQTT_BROKER_PORT: 1883
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  db_data:
+  mosquitto_data:
+  mosquitto_log:
