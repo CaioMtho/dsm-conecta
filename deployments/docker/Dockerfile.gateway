@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Instala uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copia arquivos de configuração do workspace
+COPY pyproject.toml uv.lock ./
+COPY packages/ packages/
+COPY apps/gateway/ apps/gateway/
+
+# Sincroniza dependências do gateway
+RUN uv sync --package gateway --no-dev
+
+EXPOSE 8000
+
+CMD ["uv", "run", "--package", "gateway", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

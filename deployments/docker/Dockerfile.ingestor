@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Instala uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copia arquivos de configuração do workspace
+COPY pyproject.toml uv.lock ./
+COPY packages/ packages/
+COPY apps/ingestor/ apps/ingestor/
+
+# Sincroniza dependências do ingestor
+RUN uv sync --package ingestor --no-dev
+
+CMD ["uv", "run", "--package", "ingestor", "python", "-m", "src.main"]
