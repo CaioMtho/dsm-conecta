@@ -1,12 +1,12 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
-
 from schemas.events import (
-    TelemetryEvent,
-    EventSource,
-    EventCategory,
     SUPPORTED_SCHEMA_VERSION,
+    EventCategory,
+    EventSource,
+    TelemetryEvent,
 )
 
 
@@ -33,7 +33,7 @@ def test_valid_telemetry_event_from_dict():
     assert event.category == EventCategory.INTERACAO_TELA
     assert event.payload["screen_name"] == "matriz_curricular"
     assert event.payload["duration_ms"] == 1200
-    assert event.timestamp == datetime(2026, 8, 26, 19, 30, 0, tzinfo=timezone.utc)
+    assert event.timestamp == datetime(2026, 8, 26, 19, 30, 0, tzinfo=UTC)
 
 
 def test_telemetry_event_from_json_string():
@@ -59,7 +59,7 @@ def test_telemetry_event_from_json_string():
 def test_telemetry_event_serialization_json():
     event = TelemetryEvent(
         schema_version="1.0",
-        timestamp=datetime(2026, 8, 26, 19, 30, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 8, 26, 19, 30, 0, tzinfo=UTC),
         event_id="evt_001",
         session_id="sess_001",
         source=EventSource.APP_WEB,
