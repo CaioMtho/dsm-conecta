@@ -27,9 +27,6 @@ services:
     image: eclipse-mosquitto:2
     container_name: dsm_broker
     restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "9001:9001"
     volumes:
       - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
@@ -40,6 +37,7 @@ services:
           memory: 64M
 
   gateway:
+    image: ghcr.io/${GITHUB_REPOSITORY}/gateway:latest
     build:
       context: ..
       dockerfile: deployments/docker/Dockerfile.gateway
@@ -49,8 +47,6 @@ services:
       DATABASE_URL: postgresql://dsm_user:dsm_password@db:5432/dsm_conecta
       MQTT_BROKER_HOST: broker
       MQTT_BROKER_PORT: 1883
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -62,6 +58,7 @@ services:
           memory: 128M
 
   ingestor:
+    image: ghcr.io/${GITHUB_REPOSITORY}/ingestor:latest
     build:
       context: ..
       dockerfile: deployments/docker/Dockerfile.ingestor
@@ -80,6 +77,19 @@ services:
       resources:
         limits:
           memory: 128M
+
+  nginx:
+    image: nginx:latest
+    container_name: dsm_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "1883:1883"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+      - broker
 
 volumes:
   db_data:
