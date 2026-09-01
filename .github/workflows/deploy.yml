@@ -1,0 +1,59 @@
+name: Deploy to OCI VM
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Gateway
+        run: |
+          export GITHUB_REPOSITORY=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker compose -f deployments/docker-compose.yml build gateway
+          docker push ghcr.io/${GITHUB_REPOSITORY}/gateway:latest
+
+      - name: Build and Push Ingestor
+        run: |
+          export GITHUB_REPOSITORY=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker compose -f deployments/docker-compose.yml build ingestor
+          docker push ghcr.io/${GITHUB_REPOSITORY}/ingestor:latest
+
+      - name: Copy Deploy Files to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_VM_HOST }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          source: "deployments/docker-compose.yml,deployments/docker/nginx.conf,deployments/docker/mosquitto.conf"
+          target: "~/dsm-conecta"
+          overwrite: true
+
+      - name: Deploy Services on VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_VM_HOST }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          script: |
+            echo "${{ secrets.OCI_GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            cd ~/dsm-conecta/deployments
+            export GITHUB_REPOSITORY=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            docker compose pull
+            docker compose up -d
