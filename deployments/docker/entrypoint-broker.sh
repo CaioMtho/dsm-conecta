@@ -4,7 +4,6 @@ set -e
 PASSWD_FILE="/mosquitto/data/password_file"
 
 mkdir -p /mosquitto/data
-# Limpa ou inicializa o arquivo de senhas
 > "$PASSWD_FILE"
 
 add_user() {

@@ -1,21 +1,12 @@
-# Listas de Controle de Acesso (ACL) - DSM Conecta Mosquitto Broker
-
-# 1. Perfil do Aplicativo Flutter (Mobile, Web, Desktop)
-# Só tem permissão de escrita nos tópicos sob dsm/prod/app/
 user app_user
 topic write dsm/prod/app/#
 
-# 2. Perfil do Nó Sensor Simulado (Totem/Estande)
-# Só tem permissão de escrita nos tópicos sob dsm/prod/totem/
 user simulator_user
 topic write dsm/prod/totem/#
 
-# 3. Perfil do Serviço Ingestor (Backend)
-# Permissão de leitura em todo o namespace dsm/prod/
 user ingestor_user
 topic read dsm/prod/#
 
-# 4. Perfil Administrativo e Testes de Integração
 user admin_user
 topic readwrite dsm/prod/#
 topic readwrite $SYS/#
