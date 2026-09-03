@@ -1,7 +1,9 @@
 import os
+import socket
 import time
 
 import paho.mqtt.client as mqtt
+import pytest
 from paho.mqtt.enums import CallbackAPIVersion
 
 BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "localhost")
@@ -19,6 +21,24 @@ INGESTOR_PASS = os.getenv("MQTT_INGESTOR_PASSWORD", "ingestor_pass_dev")
 
 ADMIN_USER = os.getenv("MQTT_ADMIN_USER", "admin_user")
 ADMIN_PASS = os.getenv("MQTT_ADMIN_PASSWORD", "admin_pass_dev")
+
+
+def _is_broker_running() -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.0)
+        res = s.connect_ex((BROKER_HOST, BROKER_PORT))
+        s.close()
+        return res == 0
+    except OSError:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _is_broker_running(),
+    reason=f"Broker MQTT não está em execução em {BROKER_HOST}:{BROKER_PORT} (inicie com make up-infra)",
+)
+
 
 
 def connect_client(username=None, password=None, transport="tcp", port=None):
@@ -46,6 +66,8 @@ def connect_client(username=None, password=None, transport="tcp", port=None):
             if connect_result:
                 break
             time.sleep(0.1)
+    except (OSError, RuntimeError) as exc:
+        return client, exc
     finally:
         client.loop_stop()
 
@@ -183,13 +205,18 @@ def test_websocket_connections():
 
     client_nginx.on_connect = on_connect
     try:
-        client_nginx.connect(BROKER_HOST, 80, keepalive=10)
-        client_nginx.loop_start()
-        for _ in range(30):
-            if connect_result:
-                break
-            time.sleep(0.1)
-        client_nginx.loop_stop()
+        try:
+            client_nginx.connect(BROKER_HOST, 80, keepalive=10)
+            client_nginx.loop_start()
+            for _ in range(30):
+                if connect_result:
+                    break
+                time.sleep(0.1)
+        except (OSError, RuntimeError) as exc:
+            connect_result.append(exc)
+        finally:
+            client_nginx.loop_stop()
+
         rc_nginx = connect_result[0] if connect_result else -1
         is_success = (rc_nginx == 0 or (hasattr(rc_nginx, "is_failure") and not rc_nginx.is_failure))
         assert is_success, f"Falha na conexão MQTT via Nginx /mqtt na porta 80: rc={rc_nginx}"
