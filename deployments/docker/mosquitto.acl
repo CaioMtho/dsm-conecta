@@ -1,0 +1,12 @@
+user app_user
+topic write dsm/prod/app/#
+
+user simulator_user
+topic write dsm/prod/totem/#
+
+user ingestor_user
+topic read dsm/prod/#
+
+user admin_user
+topic readwrite dsm/prod/#
+topic readwrite $SYS/#

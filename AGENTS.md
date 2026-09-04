@@ -17,3 +17,7 @@ Para adicionar dependências mútuas (ex: `gateway` dependendo de `schemas`), ut
 
 ## 4. Revisões de Código (PRs)
 Pull Requests direcionados à branch `main` exigem revisão aprovada por um integrante de outra equipe.
+
+## 5. Comentários no Código
+Comentários que apenas narram o código ou que são redundantes/óbvios são estritamente proibidos. O código não deve ser usado como repositório de documentação. Comentários só devem existir para registrar contextos não triviais, decisões arquiteturais ou detalhes pouco claros e relevantes para quem lê o código.
+
