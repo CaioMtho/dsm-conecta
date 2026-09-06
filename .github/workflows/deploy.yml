@@ -35,13 +35,29 @@ jobs:
           docker compose -f deployments/docker-compose.yml build ingestor
           docker push ghcr.io/${GITHUB_REPOSITORY}/ingestor:latest
 
+      - name: Prepare Deploy Environment on VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_VM_HOST }}
+          username: ${{ secrets.OCI_VM_USER }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p ~/dsm-conecta/deployments/docker
+            docker rm -f dsm_broker 2>/dev/null || true
+            if [ -d ~/dsm-conecta/deployments/docker/entrypoint-broker.sh ]; then
+              rm -rf ~/dsm-conecta/deployments/docker/entrypoint-broker.sh || sudo rm -rf ~/dsm-conecta/deployments/docker/entrypoint-broker.sh || true
+            fi
+            if [ -d ~/dsm-conecta/deployments/docker/mosquitto.acl ]; then
+              rm -rf ~/dsm-conecta/deployments/docker/mosquitto.acl || sudo rm -rf ~/dsm-conecta/deployments/docker/mosquitto.acl || true
+            fi
+
       - name: Copy Deploy Files to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.OCI_VM_HOST }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          source: "deployments/docker-compose.yml,deployments/docker/nginx.conf,deployments/docker/mosquitto.conf"
+          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf"
           target: "~/dsm-conecta"
           overwrite: true
 
@@ -53,6 +69,7 @@ jobs:
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           script: |
             echo "${{ secrets.OCI_GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            chmod +x ~/dsm-conecta/deployments/docker/entrypoint-broker.sh || true
             cd ~/dsm-conecta/deployments
             export GITHUB_REPOSITORY=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             docker compose pull

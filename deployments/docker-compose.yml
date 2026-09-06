@@ -27,7 +27,7 @@ services:
     image: eclipse-mosquitto:2
     container_name: dsm_broker
     restart: unless-stopped
-    entrypoint: ["/entrypoint-broker.sh"]
+    entrypoint: ["/bin/sh", "/entrypoint-broker.sh"]
     environment:
       MQTT_APP_USER: ${MQTT_APP_USER:-app_user}
       MQTT_APP_PASSWORD: ${MQTT_APP_PASSWORD:-app_pass_dev}
