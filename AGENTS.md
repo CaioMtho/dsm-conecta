@@ -21,3 +21,6 @@ Pull Requests direcionados à branch `main` exigem revisão aprovada por um inte
 ## 5. Comentários no Código
 Comentários que apenas narram o código ou que são redundantes/óbvios são estritamente proibidos. O código não deve ser usado como repositório de documentação. Comentários só devem existir para registrar contextos não triviais, decisões arquiteturais ou detalhes pouco claros e relevantes para quem lê o código.
 
+## 6. Gestão de Ambiente Flutter
+Para qualquer comando ou execução relacionada ao projeto Flutter (`apps/client`), deve-se utilizar **fvm** ao invés de `flutter` diretamente (ex: `fvm flutter test`, `fvm flutter pub get`, `fvm dart`).
+
