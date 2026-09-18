@@ -142,5 +142,14 @@ void main() {
 
       expect(find.byType(ConsentDialog), findsNothing);
     });
+
+    testWidgets('wraps dialog in PopScope with canPop false', (tester) async {
+      await tester.pumpWidget(buildTestableWidget());
+
+      final popScopeFinder = find.byWidgetPredicate(
+        (widget) => widget is PopScope && widget.canPop == false,
+      );
+      expect(popScopeFinder, findsOneWidget);
+    });
   });
 }

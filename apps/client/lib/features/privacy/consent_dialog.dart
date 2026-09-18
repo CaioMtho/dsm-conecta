@@ -29,7 +29,9 @@ class _ConsentDialogState extends ConsumerState<ConsentDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
       title: const Row(
         children: [
           Icon(Icons.privacy_tip_outlined, color: Colors.deepPurple),
@@ -129,6 +131,7 @@ class _ConsentDialogState extends ConsumerState<ConsentDialog> {
             child: const Text('Aceitar Todos'),
           ),
       ],
+      ),
     );
   }
 }
