@@ -1,3 +1,4 @@
+import 'package:client/core/privacy/consent_state.dart';
 import 'package:client/core/privacy/privacy_notifier.dart';
 import 'package:client/core/privacy/privacy_storage.dart';
 import 'package:client/core/telemetry/telemetry_gatekeeper.dart';
@@ -73,6 +74,68 @@ void main() {
       expect(gatekeeper.canEmitTelemetry(), isFalse);
       expect(gatekeeper.canCollectSensors(), isFalse);
       expect(gatekeeper.currentSessionId, isNull);
+    });
+  });
+
+  group('TelemetryGatekeeper direct instantiation', () {
+    test('blocks telemetry when sessionId is null even if consent accepted', () {
+      const gatekeeper = TelemetryGatekeeper(
+        consent: ConsentState(
+          status: ConsentStatus.accepted,
+          telemetryAccepted: true,
+          sensorsAccepted: true,
+        ),
+        sessionId: null,
+      );
+
+      expect(gatekeeper.canEmitTelemetry(), isFalse);
+      expect(gatekeeper.canCollectSensors(), isFalse);
+      expect(gatekeeper.currentSessionId, isNull);
+    });
+
+    test('blocks telemetry when sessionId is empty even if consent accepted', () {
+      const gatekeeper = TelemetryGatekeeper(
+        consent: ConsentState(
+          status: ConsentStatus.accepted,
+          telemetryAccepted: true,
+          sensorsAccepted: true,
+        ),
+        sessionId: '',
+      );
+
+      expect(gatekeeper.canEmitTelemetry(), isFalse);
+      expect(gatekeeper.canCollectSensors(), isFalse);
+      expect(gatekeeper.currentSessionId, isNull);
+    });
+
+    test('blocks telemetry when consent is rejected despite active session ID', () {
+      const gatekeeper = TelemetryGatekeeper(
+        consent: ConsentState(
+          status: ConsentStatus.rejected,
+          telemetryAccepted: true,
+          sensorsAccepted: true,
+        ),
+        sessionId: 'test-session-uuid',
+      );
+
+      expect(gatekeeper.canEmitTelemetry(), isFalse);
+      expect(gatekeeper.canCollectSensors(), isFalse);
+      expect(gatekeeper.currentSessionId, isNull);
+    });
+
+    test('allows telemetry and exposes session ID when consent accepted with valid session', () {
+      const gatekeeper = TelemetryGatekeeper(
+        consent: ConsentState(
+          status: ConsentStatus.accepted,
+          telemetryAccepted: true,
+          sensorsAccepted: true,
+        ),
+        sessionId: 'test-session-uuid',
+      );
+
+      expect(gatekeeper.canEmitTelemetry(), isTrue);
+      expect(gatekeeper.canCollectSensors(), isTrue);
+      expect(gatekeeper.currentSessionId, equals('test-session-uuid'));
     });
   });
 }
