@@ -37,6 +37,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   shared_preferences: ^2.3.5
   uuid: ^4.5.1
+  mqtt_client: ^10.5.0
 
 dev_dependencies:
   flutter_test:
