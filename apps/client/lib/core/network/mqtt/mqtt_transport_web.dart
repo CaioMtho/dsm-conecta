@@ -23,8 +23,11 @@ class MqttTransportWeb implements MqttTransportClient {
   }
 
   void _updateStatus(MqttConnectionStatus status) {
+    if (_currentStatus == status) return;
     _currentStatus = status;
-    _statusController.add(status);
+    if (!_statusController.isClosed) {
+      _statusController.add(status);
+    }
   }
 
   void _onConnected() => _updateStatus(MqttConnectionStatus.connected);
@@ -70,6 +73,12 @@ class MqttTransportWeb implements MqttTransportClient {
     final builder = MqttClientPayloadBuilder();
     builder.addString(payload);
     _client.publishMessage(topic, qos, builder.payload!, retain: retain);
+  }
+
+  @override
+  void dispose() {
+    disconnect();
+    _statusController.close();
   }
 }
 

@@ -10,6 +10,7 @@ void main() {
       const config = MqttConfig(host: 'localhost');
       final client = createMqttTransportClient(config, 'test_client_id');
       expect(client, isA<MqttTransportClient>());
+      client.dispose();
     });
 
     test('verifies MqttConnectionStatus enum values', () {
@@ -17,6 +18,20 @@ void main() {
       expect(MqttConnectionStatus.values, contains(MqttConnectionStatus.connecting));
       expect(MqttConnectionStatus.values, contains(MqttConnectionStatus.connected));
       expect(MqttConnectionStatus.values, contains(MqttConnectionStatus.fault));
+    });
+
+    test('deduplicates status updates when status does not change', () async {
+      const config = MqttConfig(host: 'localhost');
+      final client = createMqttTransportClient(config, 'test_client_id');
+      final statuses = <MqttConnectionStatus>[];
+      final sub = client.statusStream.listen(statuses.add);
+
+      client.disconnect();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(statuses, isEmpty);
+      await sub.cancel();
+      client.dispose();
     });
   });
 }

@@ -13,4 +13,5 @@ abstract class MqttTransportClient {
     MqttQos qos = MqttQos.atLeastOnce,
     bool retain = false,
   });
+  void dispose();
 }
