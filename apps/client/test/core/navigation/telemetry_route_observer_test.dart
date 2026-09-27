@@ -152,6 +152,21 @@ void main() {
       expect(fakeDispatcher.dispatchedEvents[1]['screen_name'], contains('MaterialPageRoute'));
     });
 
+    test('tracks duration on route remove', () async {
+      final routeA = MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'RemovedScreen'),
+        builder: (_) => const SizedBox(),
+      );
+
+      observer.didPush(routeA, null);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      observer.didRemove(routeA, null);
+      expect(fakeDispatcher.dispatchedEvents.length, 1);
+      expect(fakeDispatcher.dispatchedEvents.first['screen_name'], 'RemovedScreen');
+      expect(fakeDispatcher.dispatchedEvents.first['duration_seconds'], greaterThan(0.02));
+    });
+
     test('telemetryRouteObserverProvider creates instance using telemetryDispatcherProvider', () {
       final container = ProviderContainer(
         overrides: [

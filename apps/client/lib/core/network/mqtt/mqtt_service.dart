@@ -19,9 +19,10 @@ final mqttServiceProvider = Provider<MqttService>((ref) {
   return service;
 });
 
-final mqttConnectionStatusProvider = StreamProvider<MqttConnectionStatus>((ref) {
+final mqttConnectionStatusProvider = StreamProvider<MqttConnectionStatus>((ref) async* {
   final service = ref.watch(mqttServiceProvider);
-  return service.statusStream;
+  yield service.status;
+  yield* service.statusStream;
 });
 
 class MqttService {

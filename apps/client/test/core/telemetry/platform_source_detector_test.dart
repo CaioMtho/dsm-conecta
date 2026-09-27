@@ -22,5 +22,12 @@ void main() {
       expect(detector.detectFrom(platform: TargetPlatform.windows, isWeb: false), 'app_desktop');
       expect(detector.detectFrom(platform: TargetPlatform.macOS, isWeb: false), 'app_desktop');
     });
+
+    test('detect returns non-empty source starting with app_', () {
+      const detector = PlatformSourceDetector();
+      final source = detector.detect();
+      expect(source, isNotEmpty);
+      expect(source, startsWith('app_'));
+    });
   });
 }

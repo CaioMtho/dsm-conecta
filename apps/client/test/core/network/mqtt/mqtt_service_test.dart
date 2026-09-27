@@ -1,75 +1,11 @@
-import 'dart:async';
 import 'package:client/core/network/mqtt/mqtt_config.dart';
 import 'package:client/core/network/mqtt/mqtt_connection_status.dart';
 import 'package:client/core/network/mqtt/mqtt_service.dart';
-import 'package:client/core/network/mqtt/mqtt_transport_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
-class FakeMqttTransportClient implements MqttTransportClient {
-  final StreamController<MqttConnectionStatus> _controller =
-      StreamController<MqttConnectionStatus>.broadcast();
-  MqttConnectionStatus _status = MqttConnectionStatus.disconnected;
-
-  bool shouldSucceed = true;
-  bool disconnectCalled = false;
-  bool disposeCalled = false;
-  String? lastPublishedTopic;
-  String? lastPublishedPayload;
-  MqttQos? lastPublishedQos;
-  bool? lastPublishedRetain;
-  String? lastConnectUsername;
-  String? lastConnectPassword;
-
-  @override
-  MqttConnectionStatus get currentStatus => _status;
-
-  @override
-  Stream<MqttConnectionStatus> get statusStream => _controller.stream;
-
-  @override
-  Future<bool> connect({required String username, required String password}) async {
-    lastConnectUsername = username;
-    lastConnectPassword = password;
-    _status = shouldSucceed ? MqttConnectionStatus.connected : MqttConnectionStatus.fault;
-    if (!_controller.isClosed) {
-      _controller.add(_status);
-    }
-    return shouldSucceed;
-  }
-
-  @override
-  void disconnect() {
-    disconnectCalled = true;
-    _status = MqttConnectionStatus.disconnected;
-    if (!_controller.isClosed) {
-      _controller.add(_status);
-    }
-  }
-
-  @override
-  void publish({
-    required String topic,
-    required String payload,
-    MqttQos qos = MqttQos.atLeastOnce,
-    bool retain = false,
-  }) {
-    lastPublishedTopic = topic;
-    lastPublishedPayload = payload;
-    lastPublishedQos = qos;
-    lastPublishedRetain = retain;
-  }
-
-  @override
-  void dispose() {
-    disposeCalled = true;
-    disconnect();
-    if (!_controller.isClosed) {
-      _controller.close();
-    }
-  }
-}
+import '../../../helpers/fake_mqtt_transport_client.dart';
 
 void main() {
   group('MqttService', () {
@@ -165,7 +101,7 @@ void main() {
       expect(service.status, MqttConnectionStatus.disconnected);
     });
 
-    test('mqttConnectionStatusProvider exposes status stream of mqttServiceProvider', () async {
+    test('mqttConnectionStatusProvider emits initial status and subsequent stream updates', () async {
       final fakeTransport = FakeMqttTransportClient();
       final testService = MqttService(
         config: const MqttConfig(),
@@ -182,14 +118,22 @@ void main() {
         testService.dispose();
       });
 
-      expect(
-        container.read(mqttConnectionStatusProvider),
-        const AsyncLoading<MqttConnectionStatus>(),
+      final initialStatus = await container.read(mqttConnectionStatusProvider.future);
+      expect(initialStatus, MqttConnectionStatus.disconnected);
+
+      final statusHistory = <MqttConnectionStatus>[];
+      final sub = container.listen(
+        mqttConnectionStatusProvider,
+        (_, next) {
+          next.whenData(statusHistory.add);
+        },
       );
+      addTearDown(sub.close);
 
       await testService.connect();
-      final status = await container.read(mqttConnectionStatusProvider.future);
-      expect(status, MqttConnectionStatus.connected);
+      await pumpEventQueue();
+
+      expect(statusHistory, contains(MqttConnectionStatus.connected));
     });
   });
 }

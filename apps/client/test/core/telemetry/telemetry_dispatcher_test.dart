@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../network/mqtt/mqtt_service_test.dart';
+import '../../helpers/fake_mqtt_transport_client.dart';
 
 void main() {
   group('TelemetryDispatcher', () {

@@ -12,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/network/mqtt/mqtt_service_test.dart';
+import '../helpers/fake_mqtt_transport_client.dart';
 
 class IntegrationPrivacyNotifier extends PrivacyNotifier {
   final ConsentState _consentState;
