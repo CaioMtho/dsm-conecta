@@ -2,6 +2,7 @@ import 'package:client/core/privacy/privacy_storage.dart';
 import 'package:client/core/telemetry/telemetry_gatekeeper.dart';
 import 'package:client/features/privacy/consent_dialog.dart';
 import 'package:client/features/settings/settings_screen.dart';
+import 'package:client/features/status/mqtt_status_icon.dart';
 import 'package:client/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,18 @@ void main() {
     );
     final gatekeeper = container.read(telemetryGatekeeperProvider);
     expect(gatekeeper.canEmitTelemetry(), isFalse);
+  });
+
+  testWidgets('renders MqttStatusIcon in AppBar', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: const MyApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MqttStatusIcon), findsOneWidget);
   });
 
   testWidgets('navigates to SettingsScreen when settings icon is tapped', (
