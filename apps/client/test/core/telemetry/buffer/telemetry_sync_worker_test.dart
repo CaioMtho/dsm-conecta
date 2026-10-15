@@ -1,5 +1,6 @@
 import 'package:client/core/network/mqtt/mqtt_connection_status.dart';
 import 'package:client/core/network/mqtt/mqtt_service.dart';
+import 'package:client/core/telemetry/buffer/telemetry_buffer_item.dart';
 import 'package:client/core/telemetry/buffer/telemetry_buffer_service.dart';
 import 'package:client/core/telemetry/buffer/telemetry_sync_worker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -108,6 +109,27 @@ void main() {
 
       final results = await Future.wait([future1, future2]);
       expect(results.reduce((a, b) => a + b), 1);
+    });
+
+    test('safely discards corrupted items from buffer during sync', () async {
+      await storage.put(
+        'corrupt-1',
+        TelemetryBufferItem(
+          id: 'corrupt-1',
+          topic: 'topic/corrupt',
+          payloadJson: '{invalid json',
+          createdAt: DateTime.now().toUtc(),
+        ),
+      );
+      await bufferService.enqueue(topic: 'topic/valid', payload: {'valid': true});
+
+      transport.emitStatus(MqttConnectionStatus.connected);
+
+      final synced = await syncWorker.syncPending();
+      expect(synced, 1);
+      expect(await bufferService.count(), 0);
+      expect(transport.publishedMessages.length, 1);
+      expect(transport.publishedMessages.first['topic'], 'topic/valid');
     });
 
     test('telemetrySyncWorkerProvider instantiates and disposes properly', () {

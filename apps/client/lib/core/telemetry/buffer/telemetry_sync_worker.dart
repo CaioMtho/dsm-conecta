@@ -56,7 +56,13 @@ class TelemetrySyncWorker {
           if (mqttService.currentStatus != MqttConnectionStatus.connected) {
             break;
           }
-          final decodedPayload = jsonDecode(item.payloadJson) as Map<String, dynamic>;
+          final Map<String, dynamic> decodedPayload;
+          try {
+            decodedPayload = jsonDecode(item.payloadJson) as Map<String, dynamic>;
+          } catch (_) {
+            confirmedIds.add(item.id);
+            continue;
+          }
           mqttService.publish(
             topic: item.topic,
             payload: decodedPayload,

@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../network/mqtt/mqtt_service.dart';
+import 'buffer/telemetry_buffer_service.dart';
+import 'buffer/telemetry_sync_worker.dart';
 import 'platform_source_detector.dart';
 import 'telemetry_event_model.dart';
 import 'telemetry_gatekeeper.dart';
@@ -14,10 +16,14 @@ final telemetryDispatcherProvider = Provider<TelemetryDispatcher>((ref) {
   final gatekeeper = ref.watch(telemetryGatekeeperProvider);
   final mqttService = ref.watch(mqttServiceProvider);
   final detector = ref.watch(platformSourceDetectorProvider);
+  final bufferService = ref.watch(telemetryBufferServiceProvider);
+  final syncWorker = ref.watch(telemetrySyncWorkerProvider);
   return TelemetryDispatcher(
     gatekeeper: gatekeeper,
     mqttService: mqttService,
     platformSourceDetector: detector,
+    bufferService: bufferService,
+    syncWorker: syncWorker,
   );
 });
 
@@ -27,12 +33,16 @@ class TelemetryDispatcher {
   final TelemetryGatekeeper gatekeeper;
   final MqttService mqttService;
   final PlatformSourceDetector platformSourceDetector;
+  final TelemetryBufferService? bufferService;
+  final TelemetrySyncWorker? syncWorker;
   final Uuid uuid;
 
   TelemetryDispatcher({
     required this.gatekeeper,
     required this.mqttService,
     required this.platformSourceDetector,
+    this.bufferService,
+    this.syncWorker,
     this.uuid = const Uuid(),
   });
 
@@ -62,10 +72,18 @@ class TelemetryDispatcher {
       },
     );
 
-    mqttService.publish(
-      topic: screenInteractionTopic,
-      payload: event.toJson(),
-    );
+    if (bufferService != null) {
+      await bufferService!.enqueue(
+        topic: screenInteractionTopic,
+        payload: event.toMap(),
+      );
+      await syncWorker?.syncPending();
+    } else {
+      mqttService.publish(
+        topic: screenInteractionTopic,
+        payload: event.toJson(),
+      );
+    }
 
     return true;
   }

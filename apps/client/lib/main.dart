@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/navigation/telemetry_route_observer.dart';
@@ -7,12 +8,17 @@ import 'core/network/mqtt/mqtt_service.dart';
 import 'core/privacy/consent_state.dart';
 import 'core/privacy/privacy_notifier.dart';
 import 'core/privacy/privacy_storage.dart';
+import 'core/telemetry/buffer/telemetry_buffer_storage.dart';
 import 'features/privacy/consent_dialog.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/status/mqtt_status_icon.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Hive.initFlutter();
+    await Hive.openBox<Map>(HiveTelemetryBufferStorage.boxName);
+  } catch (_) {}
   final sharedPreferences = await SharedPreferences.getInstance();
 
   runApp(

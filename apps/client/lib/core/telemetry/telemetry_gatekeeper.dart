@@ -15,9 +15,23 @@ class TelemetryGatekeeper {
   final String? sessionId;
 
   const TelemetryGatekeeper({
-    required this.consent,
-    required this.sessionId,
-  });
+    ConsentState? consent,
+    String? sessionId,
+    bool? hasConsent,
+    String? currentSessionId,
+  })  : consent = consent ??
+            (hasConsent == true
+                ? const ConsentState(
+                    status: ConsentStatus.accepted,
+                    telemetryAccepted: true,
+                    sensorsAccepted: true,
+                  )
+                : const ConsentState(
+                    status: ConsentStatus.undetermined,
+                    telemetryAccepted: false,
+                    sensorsAccepted: false,
+                  )),
+        sessionId = sessionId ?? currentSessionId;
 
   bool canEmitTelemetry() {
     return consent.status == ConsentStatus.accepted &&

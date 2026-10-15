@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:client/core/network/mqtt/mqtt_config.dart';
+import 'package:client/core/network/mqtt/mqtt_connection_status.dart';
 import 'package:client/core/network/mqtt/mqtt_service.dart';
 import 'package:client/core/privacy/consent_state.dart';
 import 'package:client/core/privacy/privacy_notifier.dart';
 import 'package:client/core/privacy/privacy_storage.dart';
+import 'package:client/core/telemetry/buffer/telemetry_buffer_service.dart';
+import 'package:client/core/telemetry/buffer/telemetry_sync_worker.dart';
 import 'package:client/core/telemetry/platform_source_detector.dart';
 import 'package:client/core/telemetry/telemetry_dispatcher.dart';
 import 'package:client/core/telemetry/telemetry_gatekeeper.dart';
@@ -13,6 +16,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/fake_mqtt_transport_client.dart';
+import '../../helpers/fake_telemetry_buffer_storage.dart';
 
 void main() {
   group('TelemetryDispatcher', () {
@@ -139,6 +143,68 @@ void main() {
       expect(payload['payload']['screen_name'], 'SettingsScreen');
       expect(payload['payload']['duration_seconds'], 8.5);
     });
+
+    test('buffers screen interaction when buffer service is provided and offline', () async {
+      final fakeStorage = FakeTelemetryBufferStorage();
+      final bufferService = TelemetryBufferService(storage: fakeStorage);
+      final syncWorker = TelemetrySyncWorker(
+        bufferService: bufferService,
+        mqttService: mqttService,
+      );
+
+      const gatekeeper = TelemetryGatekeeper(
+        hasConsent: true,
+        currentSessionId: 'buffer-session-123',
+      );
+      final dispatcher = TelemetryDispatcher(
+        gatekeeper: gatekeeper,
+        mqttService: mqttService,
+        platformSourceDetector: const PlatformSourceDetector(),
+        bufferService: bufferService,
+        syncWorker: syncWorker,
+      );
+
+      final dispatched = await dispatcher.dispatchScreenInteraction(
+        screenName: 'OfflineScreen',
+        durationSeconds: 12.0,
+      );
+
+      expect(dispatched, isTrue);
+      expect(await bufferService.count(), 1);
+      expect(fakeTransport.lastPublishedTopic, isNull);
+    });
+
+    test('buffers and syncs screen interaction immediately when connected', () async {
+      fakeTransport.emitStatus(MqttConnectionStatus.connected);
+
+      final fakeStorage = FakeTelemetryBufferStorage();
+      final bufferService = TelemetryBufferService(storage: fakeStorage);
+      final syncWorker = TelemetrySyncWorker(
+        bufferService: bufferService,
+        mqttService: mqttService,
+      );
+
+      const gatekeeper = TelemetryGatekeeper(
+        hasConsent: true,
+        currentSessionId: 'online-session-123',
+      );
+      final dispatcher = TelemetryDispatcher(
+        gatekeeper: gatekeeper,
+        mqttService: mqttService,
+        platformSourceDetector: const PlatformSourceDetector(),
+        bufferService: bufferService,
+        syncWorker: syncWorker,
+      );
+
+      final dispatched = await dispatcher.dispatchScreenInteraction(
+        screenName: 'OnlineScreen',
+        durationSeconds: 5.0,
+      );
+
+      expect(dispatched, isTrue);
+      expect(await bufferService.count(), 0);
+      expect(fakeTransport.lastPublishedTopic, 'dsm/prod/app/interacao/tela');
+    });
   });
 
   group('Riverpod Providers', () {
@@ -182,6 +248,7 @@ void main() {
       expect(beforeConsent, isFalse);
 
       // Accept consent and check dispatch through container
+      fakeTransport.emitStatus(MqttConnectionStatus.connected);
       await container.read(privacyNotifierProvider.notifier).acceptAll();
       final updatedDispatcher = container.read(telemetryDispatcherProvider);
       final afterConsent = await updatedDispatcher.dispatchScreenInteraction(

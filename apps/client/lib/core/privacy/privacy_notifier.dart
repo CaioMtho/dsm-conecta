@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../session/session_notifier.dart';
+import '../telemetry/buffer/telemetry_buffer_service.dart';
 import 'consent_state.dart';
 import 'privacy_storage.dart';
 
@@ -49,7 +50,8 @@ class PrivacyNotifier extends Notifier<ConsentState> {
     if (telemetry) {
       ref.read(sessionNotifierProvider.notifier).createSession();
     } else {
-      ref.read(sessionNotifierProvider.notifier).clearSession();
+      await ref.read(sessionNotifierProvider.notifier).clearSession();
+      await ref.read(telemetryBufferServiceProvider).clear();
     }
   }
 
@@ -62,7 +64,8 @@ class PrivacyNotifier extends Notifier<ConsentState> {
     );
     await _storage.saveConsent(newState);
     state = newState;
-    ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(telemetryBufferServiceProvider).clear();
   }
 
   Future<void> revoke() async {
@@ -71,7 +74,8 @@ class PrivacyNotifier extends Notifier<ConsentState> {
 
   Future<void> clearAllData() async {
     await _storage.clearAll();
-    ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(telemetryBufferServiceProvider).clear();
     state = ConsentState.initial();
   }
 }

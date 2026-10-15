@@ -2,9 +2,12 @@ import 'package:client/core/privacy/consent_state.dart';
 import 'package:client/core/privacy/privacy_notifier.dart';
 import 'package:client/core/privacy/privacy_storage.dart';
 import 'package:client/core/session/session_notifier.dart';
+import 'package:client/core/telemetry/buffer/telemetry_buffer_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../helpers/fake_telemetry_buffer_storage.dart';
 
 void main() {
   late SharedPreferences prefs;
@@ -127,6 +130,48 @@ void main() {
       final state = container.read(privacyNotifierProvider);
       expect(state.status, ConsentStatus.undetermined);
       expect(container.read(sessionNotifierProvider), isNull);
+    });
+
+    test('revoking consent purges telemetry buffer', () async {
+      final fakeStorage = FakeTelemetryBufferStorage();
+      final testContainer = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          telemetryBufferStorageProvider.overrideWithValue(fakeStorage),
+        ],
+      );
+      addTearDown(testContainer.dispose);
+
+      final buffer = testContainer.read(telemetryBufferServiceProvider);
+      await buffer.enqueue(topic: 'topic/test', payload: {'key': 'val'});
+      expect(await buffer.count(), 1);
+
+      final notifier = testContainer.read(privacyNotifierProvider.notifier);
+      await notifier.acceptAll();
+      await notifier.revoke();
+
+      expect(await buffer.count(), 0);
+    });
+
+    test('clearAllData purges telemetry buffer', () async {
+      final fakeStorage = FakeTelemetryBufferStorage();
+      final testContainer = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          telemetryBufferStorageProvider.overrideWithValue(fakeStorage),
+        ],
+      );
+      addTearDown(testContainer.dispose);
+
+      final buffer = testContainer.read(telemetryBufferServiceProvider);
+      await buffer.enqueue(topic: 'topic/test', payload: {'key': 'val'});
+      expect(await buffer.count(), 1);
+
+      final notifier = testContainer.read(privacyNotifierProvider.notifier);
+      await notifier.acceptAll();
+      await notifier.clearAllData();
+
+      expect(await buffer.count(), 0);
     });
   });
 }
