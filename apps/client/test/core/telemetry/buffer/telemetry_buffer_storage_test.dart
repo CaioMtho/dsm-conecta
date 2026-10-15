@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:client/core/telemetry/buffer/telemetry_buffer_item.dart';
-import '../../../helpers/fake_telemetry_buffer_storage.dart';
+import 'package:client/core/telemetry/buffer/telemetry_buffer_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import '../../../helpers/fake_telemetry_buffer_storage.dart';
 
 void main() {
   group('TelemetryBufferStorage', () {
@@ -59,6 +64,69 @@ void main() {
       expect(await storage.count(), 2);
       final remainingIds = (await storage.getAll()).map((e) => e.id).toList();
       expect(remainingIds, ['id-1', 'id-3']);
+    });
+  });
+
+  group('HiveTelemetryBufferStorage', () {
+    late Directory tempDir;
+    late Box<Map> box;
+    late HiveTelemetryBufferStorage hiveStorage;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('hive_buffer_test_');
+      Hive.init(tempDir.path);
+      box = await Hive.openBox<Map>(HiveTelemetryBufferStorage.boxName);
+      hiveStorage = HiveTelemetryBufferStorage(box: box);
+    });
+
+    tearDown(() async {
+      await box.close();
+      await Hive.deleteBoxFromDisk(HiveTelemetryBufferStorage.boxName);
+      if (tempDir.existsSync()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('stores and reads directly from open Hive box', () async {
+      final item = TelemetryBufferItem(
+        id: 'test-1',
+        topic: 'topic/hive',
+        payloadJson: '{"test":true}',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+
+      await hiveStorage.put(item.id, item);
+
+      expect(await hiveStorage.count(), 1);
+      expect(box.length, 1);
+      expect(box.get('test-1'), isNotNull);
+
+      final retrieved = await hiveStorage.getAll();
+      expect(retrieved.length, 1);
+      expect(retrieved.first.id, 'test-1');
+      expect(retrieved.first.topic, 'topic/hive');
+
+      await hiveStorage.delete('test-1');
+      expect(await hiveStorage.count(), 0);
+      expect(box.isEmpty, isTrue);
+    });
+
+    test('dynamically uses open box without explicit constructor injection', () async {
+      final uninitializedStorage = HiveTelemetryBufferStorage();
+      final item = TelemetryBufferItem(
+        id: 'dyn-1',
+        topic: 'topic/dyn',
+        payloadJson: '{"dyn":true}',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+
+      await uninitializedStorage.put(item.id, item);
+
+      expect(await uninitializedStorage.count(), 1);
+      expect(box.get('dyn-1'), isNotNull);
+
+      await uninitializedStorage.clear();
+      expect(box.isEmpty, isTrue);
     });
   });
 }

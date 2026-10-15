@@ -13,25 +13,35 @@ abstract class TelemetryBufferStorage {
 
 class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
   static const String boxName = 'telemetry_buffer';
-  Box<Map>? _box;
+  Box<Map>? box;
   final Map<String, TelemetryBufferItem> _fallback = {};
+
+  HiveTelemetryBufferStorage({this.box});
+
+  Box<Map>? get _effectiveBox {
+    if (box != null && box!.isOpen) return box;
+    try {
+      if (Hive.isBoxOpen(boxName)) {
+        box = Hive.box<Map>(boxName);
+        return box;
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   Future<void> init() async {
-    if (_box != null && _box!.isOpen) return;
+    if (_effectiveBox != null) return;
     try {
-      if (Hive.isBoxOpen(boxName)) {
-        _box = Hive.box<Map>(boxName);
-      } else {
-        _box = await Hive.openBox<Map>(boxName);
-      }
+      box = await Hive.openBox<Map>(boxName);
     } catch (_) {}
   }
 
   @override
   Future<void> put(String id, TelemetryBufferItem item) async {
-    if (_box != null && _box!.isOpen) {
-      await _box!.put(id, item.toMap());
+    final box = _effectiveBox;
+    if (box != null) {
+      await box.put(id, item.toMap());
     } else {
       _fallback[id] = item;
     }
@@ -39,8 +49,9 @@ class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
 
   @override
   Future<void> delete(String id) async {
-    if (_box != null && _box!.isOpen) {
-      await _box!.delete(id);
+    final box = _effectiveBox;
+    if (box != null) {
+      await box.delete(id);
     } else {
       _fallback.remove(id);
     }
@@ -48,8 +59,9 @@ class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
 
   @override
   Future<void> deleteBatch(List<String> ids) async {
-    if (_box != null && _box!.isOpen) {
-      await _box!.deleteAll(ids);
+    final box = _effectiveBox;
+    if (box != null) {
+      await box.deleteAll(ids);
     } else {
       for (final id in ids) {
         _fallback.remove(id);
@@ -59,8 +71,9 @@ class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
 
   @override
   Future<List<TelemetryBufferItem>> getAll() async {
-    if (_box != null && _box!.isOpen) {
-      final values = _box!.values;
+    final box = _effectiveBox;
+    if (box != null) {
+      final values = box.values;
       return values.map((e) => TelemetryBufferItem.fromMap(e)).toList();
     }
     return _fallback.values.toList();
@@ -68,16 +81,18 @@ class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
 
   @override
   Future<int> count() async {
-    if (_box != null && _box!.isOpen) {
-      return _box!.length;
+    final box = _effectiveBox;
+    if (box != null) {
+      return box.length;
     }
     return _fallback.length;
   }
 
   @override
   Future<void> clear() async {
-    if (_box != null && _box!.isOpen) {
-      await _box!.clear();
+    final box = _effectiveBox;
+    if (box != null) {
+      await box.clear();
     }
     _fallback.clear();
   }
