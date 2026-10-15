@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/navigation/telemetry_route_observer.dart';
+import 'core/network/mqtt/mqtt_service.dart';
 import 'core/privacy/consent_state.dart';
 import 'core/privacy/privacy_notifier.dart';
 import 'core/privacy/privacy_storage.dart';
 import 'features/privacy/consent_dialog.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/status/mqtt_status_icon.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,17 +25,20 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final routeObserver = ref.watch(telemetryRouteObserverProvider);
+
     return MaterialApp(
       title: 'DSM Conecta',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      navigatorObservers: [routeObserver],
       home: const PrivacyGate(child: MyHomePage(title: 'DSM Conecta')),
     );
   }
@@ -51,7 +57,10 @@ class _PrivacyGateState extends ConsumerState<PrivacyGate> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkConsent());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkConsent();
+      ref.read(mqttServiceProvider).connect();
+    });
   }
 
   void _checkConsent() {
@@ -96,13 +105,17 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
         actions: [
+          const MqttStatusIcon(),
           IconButton(
             key: const Key('appbar_settings_button'),
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações de Privacidade',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: 'SettingsScreen'),
+                  builder: (_) => const SettingsScreen(),
+                ),
               );
             },
           ),
