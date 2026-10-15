@@ -74,7 +74,13 @@ class HiveTelemetryBufferStorage implements TelemetryBufferStorage {
     final box = _effectiveBox;
     if (box != null) {
       final values = box.values;
-      return values.map((e) => TelemetryBufferItem.fromMap(e)).toList();
+      final items = <TelemetryBufferItem>[];
+      for (final raw in values) {
+        try {
+          items.add(TelemetryBufferItem.fromMap(raw));
+        } catch (_) {}
+      }
+      return items;
     }
     return _fallback.values.toList();
   }

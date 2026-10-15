@@ -128,5 +128,21 @@ void main() {
       await uninitializedStorage.clear();
       expect(box.isEmpty, isTrue);
     });
+
+    test('getAll ignores corrupted entries without throwing', () async {
+      final validItem = TelemetryBufferItem(
+        id: 'valid-1',
+        topic: 'topic/valid',
+        payloadJson: '{"valid":true}',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await hiveStorage.put(validItem.id, validItem);
+
+      await box.put('corrupted-1', {'invalid_map': 123});
+
+      final all = await hiveStorage.getAll();
+      expect(all.length, 1);
+      expect(all.first.id, 'valid-1');
+    });
   });
 }

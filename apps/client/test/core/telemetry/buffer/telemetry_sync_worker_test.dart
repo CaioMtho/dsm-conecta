@@ -145,5 +145,37 @@ void main() {
 
       container.dispose();
     });
+
+    test('dequeues previously confirmed items and gracefully terminates when publish throws', () async {
+      await bufferService.enqueue(topic: 'topic/1', payload: {'item': 1});
+      await bufferService.enqueue(topic: 'topic/2', payload: {'item': 2});
+      await bufferService.enqueue(topic: 'topic/3', payload: {'item': 3});
+
+      transport.emitStatus(MqttConnectionStatus.connected);
+
+      transport.onPublish = (topic, _) {
+        if (topic == 'topic/2') {
+          throw Exception('Publish socket write failed');
+        }
+      };
+
+      final synced = await syncWorker.syncPending();
+
+      expect(synced, 1);
+      expect(await bufferService.count(), 2);
+      final remaining = await bufferService.peekBatch(limit: 10);
+      expect(remaining.map((e) => e.topic).toList(), ['topic/2', 'topic/3']);
+    });
+
+    test('handles error gracefully in status stream listener without unhandled exception', () async {
+      await bufferService.enqueue(topic: 'topic/1', payload: {'item': 1});
+      syncWorker.startListening();
+
+      transport.onPublish = (topic, _) => throw Exception('Publish connection dropped');
+      transport.emitStatus(MqttConnectionStatus.connected);
+      await pumpEventQueue();
+
+      expect(await bufferService.count(), 1);
+    });
   });
 }

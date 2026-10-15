@@ -32,7 +32,7 @@ class TelemetrySyncWorker {
   void startListening() {
     _statusSubscription ??= mqttService.statusStream.listen((status) {
       if (status == MqttConnectionStatus.connected) {
-        syncPending();
+        syncPending().catchError((Object _) => 0);
       }
     });
   }
@@ -52,8 +52,11 @@ class TelemetrySyncWorker {
         if (batch.isEmpty) break;
 
         final confirmedIds = <String>[];
+        var abortCycle = false;
+
         for (final item in batch) {
           if (mqttService.currentStatus != MqttConnectionStatus.connected) {
+            abortCycle = true;
             break;
           }
           final Map<String, dynamic> decodedPayload;
@@ -63,19 +66,28 @@ class TelemetrySyncWorker {
             confirmedIds.add(item.id);
             continue;
           }
-          mqttService.publish(
-            topic: item.topic,
-            payload: decodedPayload,
-          );
-          confirmedIds.add(item.id);
-          totalSynced++;
+          try {
+            mqttService.publish(
+              topic: item.topic,
+              payload: decodedPayload,
+            );
+            confirmedIds.add(item.id);
+            totalSynced++;
+          } catch (_) {
+            abortCycle = true;
+            break;
+          }
         }
 
-        await bufferService.dequeueBatch(confirmedIds);
-        if (confirmedIds.length < batch.length) {
+        if (confirmedIds.isNotEmpty) {
+          await bufferService.dequeueBatch(confirmedIds);
+        }
+
+        if (abortCycle || confirmedIds.length < batch.length) {
           break;
         }
       }
+    } catch (_) {
     } finally {
       _isSyncing = false;
     }
