@@ -7,6 +7,8 @@ import 'core/network/mqtt/mqtt_service.dart';
 import 'core/privacy/consent_state.dart';
 import 'core/privacy/privacy_notifier.dart';
 import 'core/privacy/privacy_storage.dart';
+import 'core/sensors/sensor_providers.dart';
+import 'core/telemetry/telemetry_gatekeeper.dart';
 import 'features/privacy/consent_dialog.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/status/mqtt_status_icon.dart';
@@ -60,6 +62,18 @@ class _PrivacyGateState extends ConsumerState<PrivacyGate> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkConsent();
       ref.read(mqttServiceProvider).connect();
+
+      final coordinator = ref.read(sensorCollectionCoordinatorProvider);
+      coordinator.attach();
+      coordinator.setConsent(
+        granted: ref.read(telemetryGatekeeperProvider).canCollectSensors(),
+      );
+    });
+
+    ref.listenManual<ConsentState>(privacyNotifierProvider, (_, _) {
+      ref.read(sensorCollectionCoordinatorProvider).setConsent(
+            granted: ref.read(telemetryGatekeeperProvider).canCollectSensors(),
+          );
     });
   }
 

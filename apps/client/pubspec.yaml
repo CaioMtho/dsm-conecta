@@ -38,6 +38,7 @@ dependencies:
   shared_preferences: ^2.3.5
   uuid: ^4.5.1
   mqtt_client: ^10.5.0
+  sensors_plus: ^7.1.1
 
 dev_dependencies:
   flutter_test:
