@@ -6,15 +6,14 @@ import '../sensor_source.dart';
 
 class MotionSensorSource implements SensorSource {
   final Duration samplingPeriod;
-  final Stream<AccelerometerEvent> Function()? _streamFactory;
+  final Stream<AccelerometerEvent> Function()? streamFactory;
   final bool _supported;
 
   MotionSensorSource({
     this.samplingPeriod = SensorInterval.normalInterval,
-    Stream<AccelerometerEvent> Function()? streamFactory,
+    this.streamFactory,
     bool? supportedOverride,
-  })  : _streamFactory = streamFactory,
-        _supported = supportedOverride ?? _platformSupportsMotion();
+  }) : _supported = supportedOverride ?? _platformSupportsMotion();
 
   static bool _platformSupportsMotion() {
     if (kIsWeb) {
@@ -44,7 +43,7 @@ class MotionSensorSource implements SensorSource {
       return const Stream<SensorReading>.empty();
     }
 
-    final source = _streamFactory?.call() ??
+    final source = streamFactory?.call() ??
         accelerometerEventStream(samplingPeriod: samplingPeriod);
 
     return source
