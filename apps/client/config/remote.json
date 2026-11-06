@@ -1,0 +1,9 @@
+{
+  "MQTT_HOST": "YOUR_OCI_VM_HOST",
+  "MQTT_TCP_PORT": "1883",
+  "MQTT_WS_PORT": "80",
+  "MQTT_WS_PATH": "/mqtt",
+  "MQTT_USERNAME": "app_user",
+  "MQTT_PASSWORD": "app_pass_dev",
+  "MQTT_CLIENT_PREFIX": "client_app_remote_"
+}
