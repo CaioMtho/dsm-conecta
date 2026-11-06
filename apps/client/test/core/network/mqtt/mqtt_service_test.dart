@@ -86,7 +86,7 @@ void main() {
       addTearDown(container.dispose);
 
       final config = container.read(mqttConfigProvider);
-      expect(config.host, 'localhost');
+      expect(config.host, MqttConfig.defaultHost);
       expect(config.clientPrefix, 'client_app_');
     });
 
