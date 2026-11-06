@@ -6,15 +6,16 @@ services:
     container_name: dsm_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: dsm_conecta
-      POSTGRES_USER: dsm_user
-      POSTGRES_PASSWORD: dsm_password
+      POSTGRES_DB: ${POSTGRES_DB:-dsm_conecta}
+      POSTGRES_USER: ${POSTGRES_USER:-dsm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dsm_password}
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dsm_user -d dsm_conecta"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-dsm_user} -d $${POSTGRES_DB:-dsm_conecta}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,7 +57,7 @@ services:
     container_name: dsm_gateway
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://dsm_user:dsm_password@db:5432/dsm_conecta
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dsm_user}:${POSTGRES_PASSWORD:-dsm_password}@db:5432/${POSTGRES_DB:-dsm_conecta}
       MQTT_BROKER_HOST: broker
       MQTT_BROKER_PORT: 1883
     depends_on:
@@ -77,7 +78,8 @@ services:
     container_name: dsm_ingestor
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://dsm_user:dsm_password@db:5432/dsm_conecta
+      PYTHONPATH: /app/apps/ingestor
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dsm_user}:${POSTGRES_PASSWORD:-dsm_password}@db:5432/${POSTGRES_DB:-dsm_conecta}
       MQTT_BROKER_HOST: broker
       MQTT_BROKER_PORT: 1883
       MQTT_BROKER_USER: ${MQTT_INGESTOR_USER:-ingestor_user}
