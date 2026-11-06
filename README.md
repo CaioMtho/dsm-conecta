@@ -112,8 +112,6 @@ No Flutter Web, a conexão utiliza a rota WebSocket `/mqtt` na porta HTTP 80 por
 
 ## 🧪 Testes e Qualidade de Código
 
-O projeto segue práticas de Test-Driven Development (TDD) e Conventional Commits.
-
 ### Executar Testes Unitários e de Integração
 
 ```bash
@@ -125,3 +123,10 @@ make test
 ```bash
 make lint
 ```
+
+---
+
+## 🤝 Contribuição
+
+Para padrões de commits, fluxo de Test-Driven Development (TDD), regras de revisão de Pull Requests e governança do repositório, consulte o guia completo em [CONTRIBUTING.md](CONTRIBUTING.md).
+
