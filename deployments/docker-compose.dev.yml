@@ -1,0 +1,11 @@
+services:
+  gateway:
+    volumes:
+      - ../apps/gateway:/app/apps/gateway
+      - ../packages:/app/packages
+    command: ["uv", "run", "--package", "gateway", "uvicorn", "--app-dir", "apps/gateway", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  ingestor:
+    volumes:
+      - ../apps/ingestor:/app/apps/ingestor
+      - ../packages:/app/packages

@@ -1,0 +1,9 @@
+{
+  "MQTT_HOST": "",
+  "MQTT_TCP_PORT": "1883",
+  "MQTT_WS_PORT": "9001",
+  "MQTT_WS_PATH": "",
+  "MQTT_USERNAME": "app_user",
+  "MQTT_PASSWORD": "app_pass_dev",
+  "MQTT_CLIENT_PREFIX": "client_app_"
+}
