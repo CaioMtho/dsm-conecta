@@ -1,6 +1,9 @@
 import 'package:client/core/session/session_notifier.dart';
+import 'package:client/core/telemetry/buffer/telemetry_buffer_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers/fake_telemetry_buffer_storage.dart';
 
 void main() {
   group('SessionNotifier', () {
@@ -60,6 +63,26 @@ void main() {
 
       notifier.clearSession();
       expect(container.read(sessionNotifierProvider), isNull);
+    });
+
+    test('clearSession purges telemetry buffer', () async {
+      final fakeStorage = FakeTelemetryBufferStorage();
+      final testContainer = ProviderContainer(
+        overrides: [
+          telemetryBufferStorageProvider.overrideWithValue(fakeStorage),
+        ],
+      );
+      addTearDown(testContainer.dispose);
+
+      final buffer = testContainer.read(telemetryBufferServiceProvider);
+      await buffer.enqueue(topic: 'topic/test', payload: {'key': 'val'});
+      expect(await buffer.count(), 1);
+
+      final notifier = testContainer.read(sessionNotifierProvider.notifier);
+      await notifier.clearSession();
+
+      expect(notifier.currentSessionId, isNull);
+      expect(await buffer.count(), 0);
     });
   });
 }

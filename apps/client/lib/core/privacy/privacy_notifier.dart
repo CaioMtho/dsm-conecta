@@ -49,7 +49,7 @@ class PrivacyNotifier extends Notifier<ConsentState> {
     if (telemetry) {
       ref.read(sessionNotifierProvider.notifier).createSession();
     } else {
-      ref.read(sessionNotifierProvider.notifier).clearSession();
+      await ref.read(sessionNotifierProvider.notifier).clearSession();
     }
   }
 
@@ -62,7 +62,7 @@ class PrivacyNotifier extends Notifier<ConsentState> {
     );
     await _storage.saveConsent(newState);
     state = newState;
-    ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(sessionNotifierProvider.notifier).clearSession();
   }
 
   Future<void> revoke() async {
@@ -71,7 +71,7 @@ class PrivacyNotifier extends Notifier<ConsentState> {
 
   Future<void> clearAllData() async {
     await _storage.clearAll();
-    ref.read(sessionNotifierProvider.notifier).clearSession();
+    await ref.read(sessionNotifierProvider.notifier).clearSession();
     state = ConsentState.initial();
   }
 }

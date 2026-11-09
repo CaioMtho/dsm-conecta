@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../telemetry/buffer/telemetry_buffer_service.dart';
+
 final sessionNotifierProvider =
     NotifierProvider<SessionNotifier, String?>(SessionNotifier.new);
 
@@ -24,7 +26,8 @@ class SessionNotifier extends Notifier<String?> {
     return newId;
   }
 
-  void clearSession() {
+  Future<void> clearSession() async {
     state = null;
+    await ref.read(telemetryBufferServiceProvider).clear();
   }
 }

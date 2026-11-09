@@ -17,6 +17,15 @@ class FakeMqttTransportClient implements MqttTransportClient {
   bool? lastPublishedRetain;
   String? lastConnectUsername;
   String? lastConnectPassword;
+  final List<Map<String, dynamic>> publishedMessages = [];
+  void Function(String topic, String payload)? onPublish;
+
+  void emitStatus(MqttConnectionStatus status) {
+    _status = status;
+    if (!_controller.isClosed) {
+      _controller.add(status);
+    }
+  }
 
   @override
   MqttConnectionStatus get currentStatus => _status;
@@ -55,6 +64,13 @@ class FakeMqttTransportClient implements MqttTransportClient {
     lastPublishedPayload = payload;
     lastPublishedQos = qos;
     lastPublishedRetain = retain;
+    publishedMessages.add({
+      'topic': topic,
+      'payload': payload,
+      'qos': qos,
+      'retain': retain,
+    });
+    onPublish?.call(topic, payload);
   }
 
   @override
