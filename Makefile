@@ -1,6 +1,6 @@
 FLUTTER ?= $(shell command -v fvm >/dev/null 2>&1 && echo "fvm flutter" || echo "flutter")
 
-.PHONY: install up-all up-infra run-simulator test test-broker-auth lint
+.PHONY: install up-all up-dev up-infra run-simulator run-client-dev run-client-remote test test-broker-auth lint
 
 install:
 	uv sync --all-packages
@@ -9,9 +9,17 @@ install:
 up-all:
 	docker compose -f deployments/docker-compose.yml up -d
 
-up-infra:
-	docker compose -f deployments/docker-compose.yml up -d db broker nginx
+up-dev:
+	docker compose -f deployments/docker-compose.yml -f deployments/docker-compose.dev.yml up -d
 
+up-infra:
+	docker compose -f deployments/docker-compose.yml up -d --no-build db broker nginx
+
+run-client-dev:
+	cd apps/client && $(FLUTTER) run --dart-define-from-file=config/dev.json
+
+run-client-remote:
+	cd apps/client && $(FLUTTER) run --dart-define-from-file=config/remote.json
 
 run-simulator:
 	cd apps/simulator && uv run python -m src.main

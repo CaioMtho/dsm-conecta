@@ -5,6 +5,7 @@ import 'package:client/core/network/mqtt/mqtt_service.dart';
 import 'package:client/core/privacy/consent_state.dart';
 import 'package:client/core/privacy/privacy_notifier.dart';
 import 'package:client/core/privacy/privacy_storage.dart';
+import 'package:client/core/sensors/sensor_providers.dart';
 import 'package:client/core/session/session_notifier.dart';
 import 'package:client/main.dart';
 import 'package:flutter/material.dart';
@@ -58,6 +59,7 @@ void main() {
           ProviderScope(
             overrides: [
               sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+              sensorSourcesProvider.overrideWithValue(const []),
               mqttServiceProvider.overrideWith(
                 (ref) => MqttService(
                   config: const MqttConfig(),
@@ -113,6 +115,7 @@ void main() {
           ProviderScope(
             overrides: [
               sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+              sensorSourcesProvider.overrideWithValue(const []),
               mqttServiceProvider.overrideWith(
                 (ref) => MqttService(
                   config: const MqttConfig(),

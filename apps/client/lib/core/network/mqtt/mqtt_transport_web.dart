@@ -12,7 +12,7 @@ class MqttTransportWeb implements MqttTransportClient {
   MqttConnectionStatus _currentStatus = MqttConnectionStatus.disconnected;
 
   MqttTransportWeb(MqttConfig config, String clientId)
-      : _client = MqttBrowserClient.withPort('ws://${config.host}', clientId, config.wsPort) {
+      : _client = MqttBrowserClient.withPort(config.wsServerUri, clientId, config.wsPort) {
     _client.keepAlivePeriod = 30;
     _client.autoReconnect = true;
     _client.websocketProtocols = MqttClientConstants.protocolsSingleDefault;

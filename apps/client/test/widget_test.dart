@@ -1,4 +1,5 @@
 import 'package:client/core/privacy/privacy_storage.dart';
+import 'package:client/core/sensors/sensor_providers.dart';
 import 'package:client/core/telemetry/telemetry_gatekeeper.dart';
 import 'package:client/features/privacy/consent_dialog.dart';
 import 'package:client/features/settings/settings_screen.dart';
@@ -22,7 +23,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          sensorSourcesProvider.overrideWithValue(const []),
+        ],
         child: const MyApp(),
       ),
     );
@@ -41,7 +45,10 @@ void main() {
   testWidgets('renders MqttStatusIcon in AppBar', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          sensorSourcesProvider.overrideWithValue(const []),
+        ],
         child: const MyApp(),
       ),
     );
@@ -55,7 +62,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          sensorSourcesProvider.overrideWithValue(const []),
+        ],
         child: const MyApp(),
       ),
     );
