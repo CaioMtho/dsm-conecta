@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [manifest]
@@ -337,13 +337,19 @@ requires-dist = [
 [[package]]
 name = "simulator"
 version = "0.1.0"
-source = { virtual = "apps/simulator" }
+source = { editable = "apps/simulator" }
 dependencies = [
+    { name = "paho-mqtt" },
     { name = "pytest" },
+    { name = "schemas" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pytest" }]
+requires-dist = [
+    { name = "paho-mqtt", specifier = ">=2.1.0" },
+    { name = "pytest" },
+    { name = "schemas", editable = "packages/schemas" },
+]
 
 [[package]]
 name = "starlette"
