@@ -9,8 +9,11 @@ class SimulatorConfig:
     port: int
     username: str | None
     password: str | None
+    topic_telemetry: str
+    topic_status: str
     interval_seconds: float
     rate_per_minute: float
+    client_id: str
 
 
 def load_config(argv: list[str] | None = None) -> SimulatorConfig:
@@ -39,6 +42,11 @@ def load_config(argv: list[str] | None = None) -> SimulatorConfig:
         default=float(os.getenv("SIMULATOR_RATE", "10.0")),
         help="Taxa média de visitantes por minuto (>= 0)",
     )
+    parser.add_argument(
+        "--client-id",
+        default=os.getenv("MQTT_CLIENT_ID", "totem-sensor-simulator-01"),
+        help="Client ID MQTT (env: MQTT_CLIENT_ID)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -54,6 +62,9 @@ def load_config(argv: list[str] | None = None) -> SimulatorConfig:
         port=args.port,
         username=args.username,
         password=args.password,
+        topic_telemetry="dsm/prod/totem/sensor/contagem",
+        topic_status="dsm/prod/totem/sensor/status",
         interval_seconds=args.interval,
         rate_per_minute=args.rate,
+        client_id=args.client_id,
     )

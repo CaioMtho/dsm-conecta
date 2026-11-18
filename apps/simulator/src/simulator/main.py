@@ -2,6 +2,7 @@ import logging
 import signal
 import sys
 import threading
+import uuid
 
 from simulator.client import MqttSensorClient
 from simulator.config import load_config
@@ -23,13 +24,18 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     client = MqttSensorClient(config, stop_event=stop_event)
+    session_id = str(uuid.uuid4())
 
     try:
         if not client.connect():
             return 1
 
         while not stop_event.is_set():
-            event = create_visitor_event(config.rate_per_minute)
+            event = create_visitor_event(
+                config.rate_per_minute,
+                config.interval_seconds,
+                session_id,
+            )
             client.publish_event(event)
             stop_event.wait(timeout=config.interval_seconds)
     finally:
