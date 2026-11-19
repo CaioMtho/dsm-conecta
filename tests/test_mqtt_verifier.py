@@ -1,8 +1,10 @@
 import json
 import logging
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from schemas import EventCategory, EventSource, TelemetryEvent
 from simulator.verifier import MqttComplianceMonitor, MqttComplianceVerifier, main
 
@@ -215,4 +217,96 @@ def test_monitor_callbacks_and_cli_exit_codes(monkeypatch):
 
     assert main(["--duration", "0"]) == 0
     assert main(["--duration", "0", "--require-multi-source"]) == 1
+
+    monitor.verifier.process_message("dsm/prod/app/interacao/tela", b"{bad", qos=1)
+    assert main(["--duration", "0"]) == 1
+
+
+def test_monitor_init_preserves_explicit_empty_credentials(monkeypatch):
+    monkeypatch.setenv("MQTT_INGESTOR_USER", "env_user")
+    monkeypatch.setenv("MQTT_INGESTOR_PASSWORD", "env_pass")
+
+    monitor = MqttComplianceMonitor(username="", password="")
+    assert monitor.username == ""
+    assert monitor.password == ""
+
+
+def test_monitor_stop_disconnects_before_stopping_loop():
+    monitor = MqttComplianceMonitor(host="localhost", port=1883)
+    call_order: list[str] = []
+    fake_client = MagicMock()
+    fake_client.disconnect.side_effect = lambda: call_order.append("disconnect")
+    fake_client.loop_stop.side_effect = lambda: call_order.append("loop_stop")
+    monitor._client = fake_client
+
+    monitor.stop()
+    assert call_order == ["disconnect", "loop_stop"]
+
+
+def test_monitor_start_raises_on_subscribe_acl_failure():
+    monitor = MqttComplianceMonitor(host="localhost", port=1883)
+    fake_client = MagicMock()
+
+    def _simulate_loop_start():
+        monitor._on_connect(fake_client, None, None, 0)
+        monitor._on_subscribe(
+            fake_client,
+            None,
+            1,
+            [SimpleNamespace(is_failure=True, value=128)],
+        )
+
+    fake_client.loop_start.side_effect = _simulate_loop_start
+    monitor._client = fake_client
+
+    with pytest.raises(PermissionError, match="assinar"):
+        monitor.start(timeout=1.0)
+
+
+def test_monitor_start_raises_on_connect_error_and_timeout():
+    monitor = MqttComplianceMonitor(host="localhost", port=1883)
+    fake_client = MagicMock()
+    fake_client.loop_start.side_effect = lambda: monitor._on_connect(
+        fake_client, None, None, 5
+    )
+    monitor._client = fake_client
+
+    with pytest.raises(ConnectionError, match="autenticação"):
+        monitor.start(timeout=1.0)
+
+    monitor_timeout = MqttComplianceMonitor(host="localhost", port=1883)
+    monitor_timeout._client = MagicMock()
+    with pytest.raises(TimeoutError, match="conectar"):
+        monitor_timeout.start(timeout=0.02)
+
+
+def test_cli_handles_keyboard_interrupt_and_logs_summary(monkeypatch):
+    verifier = MqttComplianceVerifier()
+    verifier.process_message(
+        topic="dsm/prod/totem/sensor/contagem",
+        payload=_make_event(
+            source=EventSource.SENSOR_SIMULATOR,
+            category=EventCategory.CONTAGEM_ESTANDE,
+        ).encode(),
+        qos=1,
+    )
+
+    class _FakeMonitor:
+        def __init__(self, *args, **kwargs):
+            self.verifier = verifier
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+    def _raise_interrupt(_duration):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("simulator.verifier.MqttComplianceMonitor", _FakeMonitor)
+    monkeypatch.setattr("simulator.verifier.time.sleep", _raise_interrupt)
+
+    assert main(["--duration", "5"]) == 0
+
 

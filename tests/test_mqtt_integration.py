@@ -57,8 +57,8 @@ def _publish_as_app(topic: str, payload: str, qos: int = 1) -> None:
         info.wait_for_publish(timeout=5.0)
         assert info.rc == mqtt.MQTT_ERR_SUCCESS
     finally:
-        client.loop_stop()
         client.disconnect()
+        client.loop_stop()
 
 
 def test_wildcard_subscription_validates_multiple_sources_and_qos1():
@@ -216,13 +216,19 @@ def test_simulator_lwt_delivered_on_forced_termination():
                 ),
                 timeout=10.0,
             )
-            assert sim_ready, "Simulador não publicou status online e telemetria inicial"
+            if not sim_ready:
+                proc.kill()
+                _, stderr_output = proc.communicate(timeout=5.0)
+                pytest.fail(
+                    "Simulador não publicou status online e telemetria inicial"
+                    f" (stderr={stderr_output.decode('utf-8', errors='replace')!r})"
+                )
 
             status_count_before_kill = len(monitor.verifier.status_messages)
 
             # Encerramento forçado (SIGKILL) sem pacote MQTT DISCONNECT para disparar o LWT no broker
             proc.kill()
-            proc.wait(timeout=5.0)
+            proc.communicate(timeout=5.0)
 
             lwt_received = monitor.verifier.wait_for(
                 lambda v: any(
@@ -239,4 +245,8 @@ def test_simulator_lwt_delivered_on_forced_termination():
         finally:
             if proc.poll() is None:
                 proc.kill()
-                proc.wait(timeout=5.0)
+                proc.communicate(timeout=5.0)
+            if proc.stdout is not None and not proc.stdout.closed:
+                proc.stdout.close()
+            if proc.stderr is not None and not proc.stderr.closed:
+                proc.stderr.close()

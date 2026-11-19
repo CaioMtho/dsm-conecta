@@ -291,10 +291,18 @@ class MqttComplianceMonitor:
         qos: int = 1,
         verifier: MqttComplianceVerifier | None = None,
     ) -> None:
-        self.host = host or os.getenv("MQTT_BROKER_HOST", "localhost")
-        self.port = port or int(os.getenv("MQTT_BROKER_PORT", "1883"))
-        self.username = username or os.getenv("MQTT_INGESTOR_USER", "ingestor_user")
-        self.password = password or os.getenv("MQTT_INGESTOR_PASSWORD", "ingestor_pass_dev")
+        self.host = host if host is not None else os.getenv("MQTT_BROKER_HOST", "localhost")
+        self.port = port if port is not None else int(os.getenv("MQTT_BROKER_PORT", "1883"))
+        self.username = (
+            username
+            if username is not None
+            else os.getenv("MQTT_INGESTOR_USER", "ingestor_user")
+        )
+        self.password = (
+            password
+            if password is not None
+            else os.getenv("MQTT_INGESTOR_PASSWORD", "ingestor_pass_dev")
+        )
         self.topic = topic
         self.qos = qos
         self.verifier = verifier or MqttComplianceVerifier()
@@ -302,6 +310,7 @@ class MqttComplianceMonitor:
         self._connected_event = threading.Event()
         self._subscribed_event = threading.Event()
         self._connect_error: Any = None
+        self._subscribe_error: Any = None
 
         self._client = mqtt.Client(callback_api_version=CallbackAPIVersion.VERSION2)
         if self.username:
@@ -324,6 +333,13 @@ class MqttComplianceMonitor:
     def _on_subscribe(
         self, client, userdata, mid, reason_code_list, properties=None
     ) -> None:
+        failed_codes = [
+            rc
+            for rc in reason_code_list
+            if getattr(rc, "is_failure", False) or (isinstance(rc, int) and rc >= 128)
+        ]
+        if failed_codes:
+            self._subscribe_error = failed_codes[0]
         self._subscribed_event.set()
 
     def _on_message(self, client, userdata, msg) -> None:
@@ -338,6 +354,7 @@ class MqttComplianceMonitor:
         self._connected_event.clear()
         self._subscribed_event.clear()
         self._connect_error = None
+        self._subscribe_error = None
         self._client.connect(self.host, self.port, keepalive=30)
         self._client.loop_start()
 
@@ -354,10 +371,15 @@ class MqttComplianceMonitor:
         if not self._subscribed_event.wait(timeout=timeout):
             self.stop()
             raise TimeoutError(f"Timeout ao assinar tópico {self.topic}")
+        if self._subscribe_error is not None:
+            self.stop()
+            raise PermissionError(
+                f"Falha ao assinar tópico {self.topic}: {self._subscribe_error}"
+            )
 
     def stop(self) -> None:
-        self._client.loop_stop()
         self._client.disconnect()
+        self._client.loop_stop()
 
     def __enter__(self) -> Self:
         self.start()
@@ -397,7 +419,10 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     with monitor:
-        time.sleep(args.duration)
+        try:
+            time.sleep(args.duration)
+        except KeyboardInterrupt:
+            pass
 
     summary = monitor.verifier.log_summary()
     if summary["anomaly_count"] > 0:
