@@ -1,0 +1,218 @@
+import json
+import logging
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
+from schemas import EventCategory, EventSource, TelemetryEvent
+from simulator.verifier import MqttComplianceMonitor, MqttComplianceVerifier, main
+
+
+def _make_event(
+    source: EventSource,
+    category: EventCategory,
+    event_id: str = "evt-1",
+    session_id: str = "sess-1",
+    payload: dict | None = None,
+) -> str:
+    event = TelemetryEvent(
+        timestamp=datetime(2026, 10, 20, 12, 0, 0, tzinfo=UTC),
+        event_id=event_id,
+        session_id=session_id,
+        source=source,
+        category=category,
+        payload=payload or {"screen": "home"},
+    )
+    return event.model_dump_json()
+
+
+def test_verifier_validates_multiple_sources_and_tracks_qos():
+    verifier = MqttComplianceVerifier()
+
+    sim_payload = _make_event(
+        source=EventSource.SENSOR_SIMULATOR,
+        category=EventCategory.CONTAGEM_ESTANDE,
+        event_id="evt-sim-1",
+        payload={"visitor_count": 3},
+    )
+    app_payload = _make_event(
+        source=EventSource.APP_MOBILE,
+        category=EventCategory.INTERACAO_TELA,
+        event_id="evt-app-1",
+        payload={"screen_name": "cursos"},
+    )
+
+    assert verifier.process_message(
+        topic="dsm/prod/totem/sensor/contagem",
+        payload=sim_payload.encode(),
+        qos=1,
+    )
+    assert verifier.has_required_sources() is False
+
+    assert verifier.process_message(
+        topic="dsm/prod/app/interacao/tela",
+        payload=app_payload.encode(),
+        qos=1,
+    )
+
+    assert verifier.valid_count == 2
+    assert verifier.anomaly_count == 0
+    assert verifier.has_required_sources() is True
+    assert verifier.sources_seen == {EventSource.SENSOR_SIMULATOR, EventSource.APP_MOBILE}
+    assert verifier.counts_by_source == {"sensor_simulator": 1, "app_mobile": 1}
+    assert all(record.qos == 1 for record in verifier.valid_records)
+
+
+def test_verifier_detects_invalid_json_and_schema_anomalies():
+    verifier = MqttComplianceVerifier()
+
+    assert not verifier.process_message(
+        topic="dsm/prod/app/interacao/tela",
+        payload=b"{invalid-json",
+        qos=1,
+    )
+    assert not verifier.process_message(
+        topic="dsm/prod/app/interacao/tela",
+        payload=json.dumps({"schema_version": "2.0", "event_id": "x"}).encode(),
+        qos=0,
+    )
+
+    assert verifier.valid_count == 0
+    assert verifier.anomaly_count == 2
+    assert verifier.anomalies[0].topic == "dsm/prod/app/interacao/tela"
+    assert verifier.anomalies[1].topic == "dsm/prod/app/interacao/tela"
+
+
+def test_verifier_handles_status_lwt_messages_separately():
+    verifier = MqttComplianceVerifier()
+
+    assert verifier.process_message(
+        topic="dsm/prod/totem/sensor/status",
+        payload=json.dumps({"status": "online"}).encode(),
+        qos=1,
+        retain=True,
+    )
+    assert verifier.process_message(
+        topic="dsm/prod/totem/sensor/status",
+        payload=json.dumps({"status": "offline"}).encode(),
+        qos=1,
+        retain=True,
+    )
+
+    assert verifier.valid_count == 0
+    assert verifier.anomaly_count == 0
+    assert [msg.status for msg in verifier.status_messages] == ["online", "offline"]
+    assert all(msg.qos == 1 and msg.retain for msg in verifier.status_messages)
+
+
+def test_verifier_flags_malformed_status_payload_as_anomaly():
+    verifier = MqttComplianceVerifier()
+
+    assert not verifier.process_message(
+        topic="dsm/prod/totem/sensor/status",
+        payload=json.dumps({"state": "unknown"}).encode(),
+        qos=1,
+    )
+
+    assert verifier.anomaly_count == 1
+    assert len(verifier.status_messages) == 0
+
+
+def test_verifier_emits_structured_json_summary_log(caplog):
+    logger = logging.getLogger("test.mqtt.verifier")
+    verifier = MqttComplianceVerifier(logger=logger)
+
+    verifier.process_message(
+        topic="dsm/prod/totem/sensor/contagem",
+        payload=_make_event(
+            source=EventSource.SENSOR_SIMULATOR,
+            category=EventCategory.CONTAGEM_ESTANDE,
+        ).encode(),
+        qos=1,
+    )
+    verifier.process_message(
+        topic="dsm/prod/app/interacao/tela",
+        payload=b"not-json",
+        qos=1,
+    )
+
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        summary = verifier.log_summary()
+
+    assert summary["valid_telemetry_count"] == 1
+    assert summary["anomaly_count"] == 1
+    assert summary["sources"] == {"sensor_simulator": 1}
+    assert len(summary["anomalies"]) == 1
+
+    summary_records = [
+        json.loads(record.message)
+        for record in caplog.records
+        if "mqtt_compliance_summary" in record.message
+    ]
+    assert len(summary_records) == 1
+    assert summary_records[0]["valid_telemetry_count"] == 1
+    assert summary_records[0]["anomaly_count"] == 1
+
+
+def test_verifier_handles_non_utf8_and_invalid_status_json():
+    verifier = MqttComplianceVerifier()
+
+    assert not verifier.process_message("dsm/prod/app/interacao/tela", b"\xff\xfe", qos=1)
+    assert not verifier.process_message("dsm/prod/totem/sensor/status", b"{bad", qos=1)
+    assert verifier.anomaly_count == 2
+
+
+def test_verifier_wait_for_returns_true_and_false_on_timeout():
+    verifier = MqttComplianceVerifier()
+    assert verifier.wait_for(lambda v: v.valid_count > 0, timeout=0.05) is False
+
+    verifier.process_message(
+        topic="dsm/prod/totem/sensor/contagem",
+        payload=_make_event(
+            source=EventSource.SENSOR_SIMULATOR,
+            category=EventCategory.CONTAGEM_ESTANDE,
+        ).encode(),
+        qos=1,
+    )
+    assert verifier.wait_for(lambda v: v.valid_count == 1, timeout=0.05) is True
+
+
+def test_monitor_callbacks_and_cli_exit_codes(monkeypatch):
+    monitor = MqttComplianceMonitor(
+        host="localhost",
+        port=1883,
+        username="ingestor_user",
+        password="secret",
+    )
+    fake_client = MagicMock()
+    monitor._on_connect(fake_client, None, None, 0)
+    fake_client.subscribe.assert_called_once_with("dsm/prod/#", qos=1)
+    monitor._on_subscribe(fake_client, None, 1, [])
+
+    fake_msg = MagicMock()
+    fake_msg.topic = "dsm/prod/app/interacao/tela"
+    fake_msg.payload = _make_event(
+        source=EventSource.APP_WEB,
+        category=EventCategory.INTERACAO_TELA,
+    ).encode()
+    fake_msg.qos = 1
+    fake_msg.retain = False
+    monitor._on_message(fake_client, None, fake_msg)
+
+    assert monitor.verifier.valid_count == 1
+
+    class _FakeMonitor:
+        def __init__(self, *args, **kwargs):
+            self.verifier = monitor.verifier
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+    monkeypatch.setattr("simulator.verifier.MqttComplianceMonitor", _FakeMonitor)
+    monkeypatch.setattr("simulator.verifier.time.sleep", lambda _: None)
+
+    assert main(["--duration", "0"]) == 0
+    assert main(["--duration", "0", "--require-multi-source"]) == 1
+

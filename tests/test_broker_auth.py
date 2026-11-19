@@ -34,10 +34,13 @@ def _is_broker_running() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _is_broker_running(),
-    reason=f"Broker MQTT não está em execução em {BROKER_HOST}:{BROKER_PORT} (inicie com make up-infra)",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _is_broker_running(),
+        reason=f"Broker MQTT não está em execução em {BROKER_HOST}:{BROKER_PORT} (inicie com make up-infra)",
+    ),
+]
 
 
 def connect_client(username=None, password=None, transport="tcp", port=None):
