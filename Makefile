@@ -22,7 +22,7 @@ run-client-remote:
 	cd apps/client && $(FLUTTER) run --dart-define-from-file=config/remote.json
 
 run-simulator:
-	cd apps/simulator && uv run python -m src.main
+	cd apps/simulator && uv run python -m simulator.main
 
 test:
 	uv run pytest
