@@ -98,6 +98,7 @@ make test
 make lint
 
 # (Opcional) Executa testes de integração com o broker MQTT ativo
+make test-integration
 make test-broker-auth
 ```
 

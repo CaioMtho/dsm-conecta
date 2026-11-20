@@ -1,6 +1,6 @@
 FLUTTER ?= $(shell command -v fvm >/dev/null 2>&1 && echo "fvm flutter" || echo "flutter")
 
-.PHONY: install up-all up-dev up-infra run-simulator run-client-dev run-client-remote test test-broker-auth lint
+.PHONY: install up-all up-dev up-infra run-simulator run-client-dev run-client-remote test test-broker-auth test-integration verify-mqtt lint
 
 install:
 	uv sync --all-packages
@@ -30,6 +30,12 @@ test:
 
 test-broker-auth:
 	uv run pytest tests/test_broker_auth.py
+
+test-integration:
+	uv run pytest -m integration -v -s
+
+verify-mqtt:
+	uv run python -m simulator.verifier
 
 lint:
 	uv run ruff check .
