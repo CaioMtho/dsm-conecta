@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
+import asyncpg
 import pytest
 from ingestor.logging_config import JsonLogFormatter
 from ingestor.processor import MessageProcessor, ProcessingStatus
@@ -41,6 +42,7 @@ def _valid_payload_dict(**overrides) -> dict:
 
 async def test_processor_persists_valid_telemetry_event():
     repo = AsyncMock()
+    repo.insert_event.return_value = True
     logger, stream = _make_json_logger("test.processor.valid")
     processor = MessageProcessor(repository=repo, logger=logger)
 
@@ -63,6 +65,26 @@ async def test_processor_persists_valid_telemetry_event():
     assert log_entry["event_id"] == VALID_EVENT_ID
 
 
+async def test_processor_logs_duplicate_when_repository_ignores_conflict():
+    repo = AsyncMock()
+    repo.insert_event.return_value = False
+    logger, stream = _make_json_logger("test.processor.duplicate")
+    processor = MessageProcessor(repository=repo, logger=logger)
+
+    status = await processor.process_message(
+        "dsm/prod/app/interacao/tela",
+        json.dumps(_valid_payload_dict()).encode("utf-8"),
+    )
+
+    assert status == ProcessingStatus.DUPLICATE_IGNORED
+    log_entry = json.loads(stream.getvalue().strip())
+    assert log_entry["level"] == "INFO"
+    assert log_entry["event"] == "event_duplicate_ignored"
+    assert log_entry["event_id"] == VALID_EVENT_ID
+    assert log_entry["source"] == "app_mobile"
+    assert log_entry["event_timestamp"] == "2026-11-21T18:00:00+00:00"
+
+
 @pytest.mark.parametrize("status_value", ["online", "offline"])
 async def test_processor_records_valid_device_status_without_db_insert(status_value: str):
     repo = AsyncMock()
@@ -82,12 +104,12 @@ async def test_processor_records_valid_device_status_without_db_insert(status_va
     assert log_entry["status"] == status_value
 
 
-async def test_processor_discards_malformed_status_payload_with_json_log():
+@pytest.mark.parametrize("raw_text", ['{"state": "unknown"}', "{invalid-json", '{"status": NaN}'])
+async def test_processor_discards_malformed_status_payload_with_json_log(raw_text: str):
     repo = AsyncMock()
-    logger, stream = _make_json_logger("test.processor.bad_status")
+    logger, stream = _make_json_logger(f"test.processor.bad_status.{hash(raw_text)}")
     processor = MessageProcessor(repository=repo, logger=logger)
 
-    raw_text = '{"state": "unknown"}'
     result = await processor.process_message(
         "dsm/prod/totem/sensor/status", raw_text.encode("utf-8")
     )
@@ -121,11 +143,67 @@ async def test_processor_discards_invalid_utf8_payload():
     assert log_entry["raw_payload"] == repr(b"\xff\xfe\x00")
 
 
+async def test_processor_discards_oversized_payload_and_truncates_logged_preview():
+    repo = AsyncMock()
+    logger, stream = _make_json_logger("test.processor.oversized")
+    processor = MessageProcessor(
+        repository=repo,
+        logger=logger,
+        max_payload_bytes=64,
+        max_log_payload_chars=20,
+    )
+
+    huge_payload = ("{" + "a" * 200 + "}").encode("utf-8")
+    result = await processor.process_message("dsm/prod/app/interacao/tela", huge_payload)
+
+    assert result == ProcessingStatus.DISCARDED
+    repo.insert_event.assert_not_awaited()
+
+    log_entry = json.loads(stream.getvalue().strip())
+    assert log_entry["level"] == "WARNING"
+    assert log_entry["event"] == "message_discarded"
+    assert log_entry["raw_payload_truncated"] is True
+    assert log_entry["raw_payload_size"] == len(huge_payload)
+    assert len(log_entry["raw_payload"]) == 20
+
+
+async def test_processor_truncates_large_malformed_payload_in_log():
+    repo = AsyncMock()
+    logger, stream = _make_json_logger("test.processor.truncate")
+    processor = MessageProcessor(
+        repository=repo,
+        logger=logger,
+        max_payload_bytes=1024,
+        max_log_payload_chars=32,
+    )
+
+    raw_text = "x" * 100
+    result = await processor.process_message("dsm/prod/app/interacao/tela", raw_text)
+
+    assert result == ProcessingStatus.DISCARDED
+    log_entry = json.loads(stream.getvalue().strip())
+    assert log_entry["raw_payload_truncated"] is True
+    assert log_entry["raw_payload_size"] == 100
+    assert len(log_entry["raw_payload"]) == 32
+
+
 @pytest.mark.parametrize(
     ("label", "raw_payload"),
     [
         ("malformed_json", "{not-valid-json"),
         ("json_array", '["not", "an", "object"]'),
+        (
+            "nan_in_payload",
+            json.dumps(_valid_payload_dict()).replace("3.5", "NaN"),
+        ),
+        (
+            "infinity_in_payload",
+            json.dumps(_valid_payload_dict()).replace("3.5", "Infinity"),
+        ),
+        (
+            "nul_byte_in_payload",
+            json.dumps(_valid_payload_dict(payload={"screen_name": "home\u0000x"})),
+        ),
         (
             "missing_schema_version",
             json.dumps(
@@ -189,6 +267,7 @@ async def test_processor_discards_invalid_messages_with_structured_json_log(
 
 async def test_processor_continues_after_malformed_message():
     repo = AsyncMock()
+    repo.insert_event.return_value = True
     logger, stream = _make_json_logger("test.processor.resilience")
     processor = MessageProcessor(repository=repo, logger=logger)
 
@@ -211,10 +290,18 @@ async def test_processor_continues_after_malformed_message():
     assert [entry["event"] for entry in lines] == ["message_discarded", "event_persisted"]
 
 
-async def test_processor_handles_persistence_error_without_crashing():
+@pytest.mark.parametrize(
+    "exc",
+    [
+        asyncpg.PostgresError("connection dropped"),
+        asyncpg.InternalClientError("internal protocol state"),
+        RuntimeError("pool unavailable"),
+    ],
+)
+async def test_processor_handles_persistence_error_without_crashing(exc: Exception):
     repo = AsyncMock()
-    repo.insert_event.side_effect = RuntimeError("connection dropped")
-    logger, stream = _make_json_logger("test.processor.db_error")
+    repo.insert_event.side_effect = exc
+    logger, stream = _make_json_logger(f"test.processor.db_error.{type(exc).__name__}")
     processor = MessageProcessor(repository=repo, logger=logger)
 
     result = await processor.process_message(
@@ -228,4 +315,4 @@ async def test_processor_handles_persistence_error_without_crashing():
     assert log_entry["event"] == "persistence_failed"
     assert log_entry["topic"] == "dsm/prod/app/interacao/tela"
     assert log_entry["event_id"] == VALID_EVENT_ID
-    assert "connection dropped" in log_entry["error"]
+    assert str(exc) in log_entry["error"]

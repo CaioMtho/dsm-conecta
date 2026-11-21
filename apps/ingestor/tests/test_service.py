@@ -7,6 +7,7 @@ from typing import Self
 from unittest.mock import AsyncMock
 
 import aiomqtt
+import pytest
 from ingestor.config import IngestorConfig
 from ingestor.logging_config import JsonLogFormatter
 from ingestor.processor import MessageProcessor
@@ -67,11 +68,12 @@ class _FakeMqttClient:
         messages: list[SimpleNamespace | Exception],
         enter_error: Exception | None = None,
         hold_open: bool = False,
+        subscribe_return: object = (1,),
     ) -> None:
         self._items = list(messages)
         self._enter_error = enter_error
         self._hold_open = hold_open
-        self.subscribe = AsyncMock()
+        self.subscribe = AsyncMock(return_value=subscribe_return)
         self.exited = False
 
     async def __aenter__(self) -> Self:
@@ -96,7 +98,11 @@ class _FakeMqttClient:
 
 
 async def test_service_connects_subscribes_qos1_and_persists_valid_messages():
-    config = _make_config(mqtt_client_id="ingestor-test")
+    config = _make_config(
+        mqtt_client_id="ingestor-test",
+        mqtt_clean_session=False,
+        mqtt_max_queued_messages=500,
+    )
     repo = AsyncMock()
     logger, stream = _make_json_logger("test.service.happy")
     processor = MessageProcessor(repository=repo, logger=logger)
@@ -104,12 +110,11 @@ async def test_service_connects_subscribes_qos1_and_persists_valid_messages():
 
     received_kwargs: list[dict] = []
     processed_done = asyncio.Event()
-    original_insert = repo.insert_event
 
     async def _insert_and_stop(event):
-        await original_insert(event)
         processed_done.set()
         stop_event.set()
+        return True
 
     repo.insert_event = AsyncMock(side_effect=_insert_and_stop)
 
@@ -151,6 +156,8 @@ async def test_service_connects_subscribes_qos1_and_persists_valid_messages():
             "password": "ingestor_pass_dev",
             "keepalive": 60,
             "identifier": "ingestor-test",
+            "clean_session": False,
+            "max_queued_incoming_messages": 500,
         }
     ]
     fake_client.subscribe.assert_awaited_once_with("dsm/prod/#", qos=1)
@@ -160,6 +167,54 @@ async def test_service_connects_subscribes_qos1_and_persists_valid_messages():
     assert "mqtt_connected_and_subscribed" in events
     assert "message_discarded" in events
     assert "event_persisted" in events
+
+
+@pytest.mark.parametrize(
+    "rejected_suback",
+    [
+        (128,),
+        [SimpleNamespace(is_failure=True, value=128)],
+    ],
+)
+async def test_service_detects_suback_acl_rejection_and_retries(rejected_suback):
+    config = _make_config(reconnect_initial_delay=0.01, reconnect_max_delay=0.02)
+    repo = AsyncMock()
+    logger, stream = _make_json_logger(f"test.service.suback.{type(rejected_suback).__name__}")
+    processor = MessageProcessor(repository=repo, logger=logger)
+    stop_event = asyncio.Event()
+
+    async def _insert_and_stop(event):
+        stop_event.set()
+        return True
+
+    repo.insert_event = AsyncMock(side_effect=_insert_and_stop)
+
+    rejected_client = _FakeMqttClient(
+        messages=[],
+        subscribe_return=rejected_suback,
+    )
+    accepted_client = _FakeMqttClient(
+        messages=[_valid_message(VALID_EVENT_ID_1)],
+        subscribe_return=(1,),
+        hold_open=True,
+    )
+    clients = iter([rejected_client, accepted_client])
+
+    service = IngestorService(
+        config=config,
+        repository=repo,
+        processor=processor,
+        client_factory=lambda **_: next(clients),
+        logger=logger,
+    )
+
+    await service.run(stop_event=stop_event)
+
+    repo.insert_event.assert_awaited_once()
+    events = [json.loads(line)["event"] for line in stream.getvalue().strip().splitlines()]
+    assert "mqtt_subscribe_rejected" in events
+    assert "mqtt_connection_lost" in events
+    assert "mqtt_connected_and_subscribed" in events
 
 
 async def test_service_reconnects_and_resubscribes_after_broker_oscillation():
@@ -175,6 +230,7 @@ async def test_service_reconnects_and_resubscribes_after_broker_oscillation():
         persisted_ids.append(event.event_id)
         if len(persisted_ids) == 2:
             stop_event.set()
+        return True
 
     repo.insert_event = AsyncMock(side_effect=_track_insert)
 
@@ -215,6 +271,91 @@ async def test_service_reconnects_and_resubscribes_after_broker_oscillation():
     assert len(loss_logs) == 2
     assert loss_logs[0]["retry_in_seconds"] == 0.01
     assert loss_logs[1]["retry_in_seconds"] == 0.02
+
+
+async def test_service_retries_initial_database_connection_with_structured_log():
+    config = _make_config(reconnect_initial_delay=0.01, reconnect_max_delay=0.02)
+    repo = AsyncMock()
+    logger, stream = _make_json_logger("test.service.db_retry")
+    processor = MessageProcessor(repository=repo, logger=logger)
+    stop_event = asyncio.Event()
+
+    attempts = 0
+
+    async def _flaky_connect():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("db not ready")
+
+    async def _insert_and_stop(event):
+        stop_event.set()
+        return True
+
+    repo.connect = AsyncMock(side_effect=_flaky_connect)
+    repo.insert_event = AsyncMock(side_effect=_insert_and_stop)
+
+    fake_client = _FakeMqttClient(messages=[_valid_message(VALID_EVENT_ID_1)], hold_open=True)
+    service = IngestorService(
+        config=config,
+        repository=repo,
+        processor=processor,
+        client_factory=lambda **_: fake_client,
+        logger=logger,
+    )
+
+    await service.run(stop_event=stop_event)
+
+    assert attempts == 2
+    repo.insert_event.assert_awaited_once()
+    events = [json.loads(line)["event"] for line in stream.getvalue().strip().splitlines()]
+    assert "db_connection_failed" in events
+    assert "event_persisted" in events
+
+
+async def test_service_finishes_in_flight_insert_on_graceful_shutdown():
+    config = _make_config()
+    repo = AsyncMock()
+    logger, _ = _make_json_logger("test.service.inflight")
+    processor = MessageProcessor(repository=repo, logger=logger)
+
+    insert_started = asyncio.Event()
+    allow_insert_finish = asyncio.Event()
+    insert_completed = False
+
+    async def _slow_insert(event):
+        nonlocal insert_completed
+        insert_started.set()
+        await allow_insert_finish.wait()
+        insert_completed = True
+        return True
+
+    repo.insert_event = AsyncMock(side_effect=_slow_insert)
+    fake_client = _FakeMqttClient(messages=[_valid_message(VALID_EVENT_ID_1)], hold_open=True)
+
+    service = IngestorService(
+        config=config,
+        repository=repo,
+        processor=processor,
+        client_factory=lambda **_: fake_client,
+        logger=logger,
+    )
+
+    external_stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop_event=external_stop))
+
+    await asyncio.wait_for(insert_started.wait(), timeout=1.0)
+    service.stop()
+    await asyncio.sleep(0.02)
+    assert not task.done()
+
+    allow_insert_finish.set()
+    await asyncio.wait_for(task, timeout=1.0)
+
+    assert insert_completed is True
+    assert external_stop.is_set() is True
+    assert service.is_running is False
+    repo.close.assert_awaited_once()
 
 
 async def test_service_stops_gracefully_while_waiting_for_messages():

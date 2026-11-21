@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
@@ -18,22 +19,24 @@ class EventRepository(Protocol):
 
     async def close(self) -> None: ...
 
-    async def insert_event(self, event: TelemetryEvent) -> None: ...
+    async def insert_event(self, event: TelemetryEvent) -> bool: ...
 
 
 class TelemetryRepository:
     def __init__(
         self,
         dsn: str,
-        min_size: int = 2,
-        max_size: int = 10,
+        min_size: int = 1,
+        max_size: int = 5,
         command_timeout: float = 10.0,
+        close_timeout: float = 5.0,
         pool_factory: Callable[..., Awaitable[Any]] = asyncpg.create_pool,
     ) -> None:
         self._dsn = dsn
         self._min_size = min_size
         self._max_size = max_size
         self._command_timeout = command_timeout
+        self._close_timeout = close_timeout
         self._pool_factory = pool_factory
         self._pool: Any = None
 
@@ -56,15 +59,24 @@ class TelemetryRepository:
             return
         pool = self._pool
         self._pool = None
-        await pool.close()
+        try:
+            await asyncio.wait_for(pool.close(), timeout=self._close_timeout)
+        except TimeoutError:
+            terminate = getattr(pool, "terminate", None)
+            if callable(terminate):
+                terminate()
 
-    async def insert_event(self, event: TelemetryEvent) -> None:
+    async def insert_event(self, event: TelemetryEvent) -> bool:
         if self._pool is None:
             raise RuntimeError("Pool de conexões TimescaleDB não foi inicializado.")
 
-        serialized_payload = json.dumps(event.payload, ensure_ascii=False)
+        serialized_payload = json.dumps(
+            event.payload,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            status = await conn.execute(
                 INSERT_TELEMETRY_EVENT_SQL,
                 UUID(event.event_id),
                 event.timestamp,
@@ -73,3 +85,4 @@ class TelemetryRepository:
                 event.category.value,
                 serialized_payload,
             )
+        return status != "INSERT 0 0"

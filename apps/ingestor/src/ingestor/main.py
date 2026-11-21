@@ -48,6 +48,7 @@ async def run_service(
         min_size=resolved_config.db_pool_min_size,
         max_size=resolved_config.db_pool_max_size,
         command_timeout=resolved_config.db_command_timeout,
+        close_timeout=resolved_config.db_close_timeout,
     )
     service = IngestorService(
         config=resolved_config,
