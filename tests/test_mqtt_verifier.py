@@ -8,12 +8,15 @@ import pytest
 from schemas import EventCategory, EventSource, TelemetryEvent
 from simulator.verifier import MqttComplianceMonitor, MqttComplianceVerifier, main
 
+DEFAULT_EVENT_ID = "550e8400-e29b-41d4-a716-446655440000"
+DEFAULT_SESSION_ID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
 
 def _make_event(
     source: EventSource,
     category: EventCategory,
-    event_id: str = "evt-1",
-    session_id: str = "sess-1",
+    event_id: str = DEFAULT_EVENT_ID,
+    session_id: str = DEFAULT_SESSION_ID,
     payload: dict | None = None,
 ) -> str:
     event = TelemetryEvent(
@@ -33,13 +36,13 @@ def test_verifier_validates_multiple_sources_and_tracks_qos():
     sim_payload = _make_event(
         source=EventSource.SENSOR_SIMULATOR,
         category=EventCategory.CONTAGEM_ESTANDE,
-        event_id="evt-sim-1",
+        event_id="550e8400-e29b-41d4-a716-446655440001",
         payload={"visitor_count": 3},
     )
     app_payload = _make_event(
         source=EventSource.APP_MOBILE,
         category=EventCategory.INTERACAO_TELA,
-        event_id="evt-app-1",
+        event_id="550e8400-e29b-41d4-a716-446655440002",
         payload={"screen_name": "cursos"},
     )
 
