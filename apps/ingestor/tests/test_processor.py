@@ -265,6 +265,24 @@ async def test_processor_discards_invalid_messages_with_structured_json_log(
     assert log_entry["error"]
 
 
+async def test_processor_handles_deeply_nested_payload_without_recursion_error():
+    repo = AsyncMock()
+    repo.insert_event.return_value = True
+    logger, _ = _make_json_logger("test.processor.deep_nesting")
+    processor = MessageProcessor(repository=repo, logger=logger)
+
+    deep_list = "[" * 600 + '"ok"' + "]" * 600
+    raw = (
+        '{"schema_version":"1.0","timestamp":"2026-11-21T18:00:00Z",'
+        f'"event_id":"{VALID_EVENT_ID}","session_id":"{VALID_SESSION_ID}",'
+        '"source":"app_mobile","category":"interacao_tela",'
+        f'"payload":{{"nested":{deep_list}}}}}'
+    )
+
+    result = await processor.process_message("dsm/prod/app/interacao/tela", raw.encode("utf-8"))
+    assert result == ProcessingStatus.PERSISTED
+
+
 async def test_processor_continues_after_malformed_message():
     repo = AsyncMock()
     repo.insert_event.return_value = True

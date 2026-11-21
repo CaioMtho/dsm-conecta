@@ -30,15 +30,17 @@ def _reject_json_constant(token: str) -> Any:
 
 
 def _contains_nul_character(value: Any) -> bool:
-    if isinstance(value, str):
-        return "\x00" in value
-    if isinstance(value, dict):
-        return any(
-            _contains_nul_character(k) or _contains_nul_character(v)
-            for k, v in value.items()
-        )
-    if isinstance(value, list):
-        return any(_contains_nul_character(item) for item in value)
+    stack: list[Any] = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, str):
+            if "\x00" in current:
+                return True
+        elif isinstance(current, dict):
+            stack.extend(current.keys())
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
     return False
 
 
@@ -172,7 +174,7 @@ class MessageProcessor:
     def _process_status_message(self, topic: str, raw_text: str) -> ProcessingStatus:
         try:
             data = json.loads(raw_text, parse_constant=_reject_json_constant)
-        except (json.JSONDecodeError, ValueError) as exc:
+        except (json.JSONDecodeError, ValueError, RecursionError) as exc:
             self._log_discarded(
                 topic=topic,
                 error=f"JSON de status inválido: {exc}",
@@ -204,7 +206,7 @@ class MessageProcessor:
     ) -> TelemetryEvent | None:
         try:
             data = json.loads(raw_text, parse_constant=_reject_json_constant)
-        except (json.JSONDecodeError, ValueError) as exc:
+        except (json.JSONDecodeError, ValueError, RecursionError) as exc:
             self._log_discarded(
                 topic=topic,
                 error=f"JSON malformado: {exc}",
