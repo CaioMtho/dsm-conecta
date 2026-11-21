@@ -59,6 +59,7 @@ def _is_db_ready() -> bool:
         result = subprocess.run(
             ["docker", "exec", DB_CONTAINER, "pg_isready", "-q"],
             capture_output=True,
+            check=False,
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -71,6 +72,7 @@ def _psql(sql: str) -> subprocess.CompletedProcess[str]:
         ["docker", "exec", "-i", DB_CONTAINER, "sh", "-c", PSQL],
         input=sql,
         capture_output=True,
+        check=False,
         text=True,
         encoding="utf-8",
         timeout=60,
@@ -83,18 +85,18 @@ def _query(sql: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-class TestTelemetryEventsHypertable:
-    pytestmark = [
-        pytest.mark.integration,
-        pytest.mark.skipif(
-            not _is_db_ready(),
-            reason=(
-                f"Container {DB_CONTAINER} não está em execução "
-                "(inicie com docker compose up -d db)"
-            ),
-        ),
-    ]
+requires_db = pytest.mark.skipif(
+    not _is_db_ready(),
+    reason=(
+        f"Container {DB_CONTAINER} não está em execução "
+        "(inicie com docker compose up -d db)"
+    ),
+)
 
+
+@pytest.mark.integration
+@requires_db
+class TestTelemetryEventsHypertable:
     def test_columns_are_strictly_typed_and_required(self):
         rows = _query(
             """
