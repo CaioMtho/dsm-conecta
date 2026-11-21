@@ -210,6 +210,48 @@ class TestTelemetryEventsHypertable:
 
         assert rows == ["1"]
 
+    def test_reapply_and_duplicate_insert_on_compressed_chunk(self):
+        event_id = uuid.uuid4()
+        # now() é fixo dentro da transação, então os dois INSERTs geram o mesmo
+        # timestamp e o segundo colide com a linha já comprimida.
+        event_ts = "now() - INTERVAL '20 days'"
+        insert = f"""
+            INSERT INTO telemetry_events
+                (event_id, timestamp, session_id, source, category, payload)
+            VALUES (
+                '{event_id}', {event_ts}, '{uuid.uuid4()}',
+                'app_mobile', 'interacao_tela', '{{"screen_name": "home"}}'
+            )
+            ON CONFLICT (event_id, timestamp) DO NOTHING;
+        """
+        event_chunk = f"""
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'telemetry_events'
+              AND range_start <= {event_ts} AND range_end > {event_ts}
+        """
+        init_sql = INIT_SQL.read_text(encoding="utf-8")
+
+        rows = _query(
+            f"""
+            BEGIN;
+            {insert}
+            \\o /dev/null
+            SELECT compress_chunk(
+                format('%I.%I', chunk_schema, chunk_name)::regclass,
+                if_not_compressed => TRUE
+            )
+            {event_chunk};
+            {init_sql}
+            \\o
+            {insert}
+            SELECT is_compressed {event_chunk};
+            SELECT count(*) FROM telemetry_events WHERE event_id = '{event_id}';
+            ROLLBACK;
+            """
+        )
+
+        assert rows == ["t", "1"]
+
     def test_init_script_can_be_reapplied(self):
         result = _psql(INIT_SQL.read_text(encoding="utf-8"))
 
