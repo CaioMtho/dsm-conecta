@@ -62,8 +62,8 @@ def _publish_as_app(topic: str, payload: str, qos: int = 1) -> None:
 
 
 def test_wildcard_subscription_validates_multiple_sources_and_qos1():
-    sim_session_id = f"sim-session-{uuid.uuid4()}"
-    app_event_id = f"app-evt-{uuid.uuid4()}"
+    sim_session_id = str(uuid.uuid4())
+    app_event_id = str(uuid.uuid4())
 
     with MqttComplianceMonitor(
         host=BROKER_HOST,
@@ -98,7 +98,7 @@ def test_wildcard_subscription_validates_multiple_sources_and_qos1():
         app_event = TelemetryEvent(
             timestamp=datetime.now(UTC),
             event_id=app_event_id,
-            session_id=f"app-session-{uuid.uuid4()}",
+            session_id=str(uuid.uuid4()),
             source=EventSource.APP_MOBILE,
             category=EventCategory.INTERACAO_TELA,
             payload={"screen_name": "cursos", "action": "view"},

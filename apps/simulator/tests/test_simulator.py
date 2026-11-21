@@ -32,17 +32,18 @@ def test_poisson_sample_zero_or_negative() -> None:
 
 
 def test_event_formatting_contract() -> None:
+    session_id = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
     event = create_visitor_event(
         people_per_minute=60.0,
         interval_seconds=10.0,
-        session_id="session-test-01",
+        session_id=session_id,
     )
 
     assert isinstance(event, TelemetryEvent)
     assert event.schema_version == "1.0"
     assert event.source == EventSource.SENSOR_SIMULATOR
     assert event.category == EventCategory.CONTAGEM_ESTANDE
-    assert event.session_id == "session-test-01"
+    assert event.session_id == session_id
     assert isinstance(event.payload["visitor_count"], int)
     assert event.payload["visitor_count"] >= 0
 
@@ -127,7 +128,7 @@ def test_lwt_qos1_publish_and_disconnect(simulator_config: SimulatorConfig) -> N
     sensor._on_connect(mock_mqtt, None, {}, 0)
     assert sensor.is_connected is True
 
-    event = create_visitor_event(30.0, 5.0, "session-1")
+    event = create_visitor_event(30.0, 5.0, "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
     assert sensor.publish_event(event) is True
 
     call_kwargs = mock_mqtt.publish.call_args.kwargs
@@ -165,7 +166,12 @@ def test_connect_retry_and_stop_event(simulator_config: SimulatorConfig) -> None
 
     sensor._on_disconnect(mock_mqtt, None, {}, 1)
     assert sensor.is_connected is False
-    assert sensor.publish_event(create_visitor_event(15.0, 5.0, "session-2")) is False
+    assert (
+        sensor.publish_event(
+            create_visitor_event(15.0, 5.0, "6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+        )
+        is False
+    )
 
 
 def test_connect_aborted_on_stop_signal(simulator_config: SimulatorConfig) -> None:
