@@ -20,6 +20,7 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
+asyncio_mode = "auto"
 markers = [
     "integration: testes de integração que exigem o broker MQTT em execução",
 ]
@@ -28,5 +29,7 @@ markers = [
 dev = [
     "paho-mqtt>=2.1.0",
     "pytest>=9.1.1",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.16.4",
 ]
