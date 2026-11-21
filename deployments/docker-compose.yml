@@ -9,11 +9,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-dsm_conecta}
       POSTGRES_USER: ${POSTGRES_USER:-dsm_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dsm_password}
+      # Montar o script como arquivo (e não o diretório inteiro) expõe os scripts
+      # de init da imagem; o de tuning reescreveria o postgresql.conf.
+      NO_TS_TUNE: "true"
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./docker/init-timescaledb.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-dsm_user} -d $${POSTGRES_DB:-dsm_conecta}"]
       interval: 10s
