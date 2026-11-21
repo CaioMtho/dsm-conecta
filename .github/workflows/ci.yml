@@ -24,7 +24,46 @@ jobs:
       - name: Lint Python
         run: uv run ruff check .
       - name: Test Python
-        run: uv run pytest
+        run: uv run pytest -m "not integration"
+
+  test-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --all-packages
+      - name: Start integration infrastructure
+        run: |
+          export GITHUB_REPOSITORY="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          docker compose -f deployments/docker-compose.yml up -d --build --wait db broker gateway nginx
+          for _ in $(seq 1 30); do
+            if docker exec dsm_db pg_isready -h 127.0.0.1 -U "${POSTGRES_USER:-dsm_user}" -d "${POSTGRES_DB:-dsm_conecta}" -q; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "TimescaleDB não ficou pronto para conexões TCP dentro do tempo limite." >&2
+          exit 1
+      - name: Run integration tests
+        env:
+          CI_REQUIRE_INTEGRATION: "1"
+        run: uv run pytest -m integration -v
+      - name: Collect container logs on failure
+        if: failure()
+        run: |
+          export GITHUB_REPOSITORY="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          docker compose -f deployments/docker-compose.yml ps -a
+          docker compose -f deployments/docker-compose.yml logs --no-color
+      - name: Tear down integration infrastructure
+        if: always()
+        run: |
+          export GITHUB_REPOSITORY="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          docker compose -f deployments/docker-compose.yml down -v --remove-orphans
 
   test-flutter:
     runs-on: ubuntu-latest

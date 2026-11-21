@@ -21,7 +21,7 @@ target-version = "py312"
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
 markers = [
-    "integration: testes de integração que exigem o broker MQTT em execução",
+    "integration: testes de integração que exigem os serviços de infraestrutura em execução (TimescaleDB, broker MQTT e Nginx)",
 ]
 
 [dependency-groups]
