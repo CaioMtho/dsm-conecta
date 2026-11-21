@@ -57,7 +57,7 @@ jobs:
           host: ${{ secrets.OCI_VM_HOST }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf"
+          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf,deployments/docker/init-timescaledb.sql"
           target: "~/dsm-conecta"
           overwrite: true
 
@@ -68,9 +68,14 @@ jobs:
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           script: |
+            set -e
             echo "${{ secrets.OCI_GH_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             chmod +x ~/dsm-conecta/deployments/docker/entrypoint-broker.sh || true
             cd ~/dsm-conecta/deployments
             export GITHUB_REPOSITORY=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             docker compose pull
+            # O volume do banco já existe na VM, então o initdb não roda; o script é
+            # idempotente e é reaplicado a cada deploy antes de subir os demais serviços.
+            docker compose up -d --wait db
+            docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < docker/init-timescaledb.sql
             docker compose up -d
