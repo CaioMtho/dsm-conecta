@@ -97,9 +97,12 @@ make test
 # Executa os linters (ruff no backend e fvm flutter analyze no frontend)
 make lint
 
-# (Opcional) Executa testes de integração com o broker MQTT ativo
+# (Opcional) Executa testes de integração com a infraestrutura Docker ativa (TimescaleDB, broker MQTT e Nginx)
 make test-integration
 make test-broker-auth
+
+# Executa testes de integração falhando caso algum teste seja pulado (mesmo comportamento da CI)
+CI_REQUIRE_INTEGRATION=1 uv run pytest -m integration -v
 ```
 
 ---
