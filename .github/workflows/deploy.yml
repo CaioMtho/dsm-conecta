@@ -57,7 +57,7 @@ jobs:
           host: ${{ secrets.OCI_VM_HOST }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf"
+          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf,deployments/docker/init-timescaledb.sql"
           target: "~/dsm-conecta"
           overwrite: true
 
