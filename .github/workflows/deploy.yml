@@ -57,7 +57,7 @@ jobs:
           host: ${{ secrets.OCI_VM_HOST }}
           username: ${{ secrets.OCI_VM_USER }}
           key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf,deployments/docker/init-timescaledb.sql"
+          source: "deployments/docker-compose.yml,deployments/docker/entrypoint-broker.sh,deployments/docker/mosquitto.acl,deployments/docker/mosquitto.conf,deployments/docker/nginx.conf,deployments/docker/init-timescaledb.sql,deployments/docker/init-aggregates.sql,deployments/docker/init-relational.sql"
           target: "~/dsm-conecta"
           overwrite: true
 
@@ -78,4 +78,6 @@ jobs:
             # idempotente e é reaplicado a cada deploy antes de subir os demais serviços.
             docker compose up -d --wait db
             docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < docker/init-timescaledb.sql
+            docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < docker/init-aggregates.sql
+            docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < docker/init-relational.sql
             docker compose up -d

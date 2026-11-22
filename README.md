@@ -34,12 +34,17 @@ As variáveis controlam:
 - Banco de dados TimescaleDB (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`).
 - Credenciais de autenticação no broker MQTT Mosquitto (`MQTT_*`).
 
-O banco de dados é inicializado automaticamente com o script `deployments/docker/init-timescaledb.sql`, que habilita a extensão TimescaleDB e cria a hypertable `telemetry_events` (chunks de 7 dias, compressão colunar após 14 dias e retenção de 90 dias).
+O banco de dados é inicializado automaticamente em ordem alfabética pelos scripts em `deployments/docker/`:
+- `01-init-timescaledb.sql` (`init-timescaledb.sql`): habilita a extensão TimescaleDB e cria a hypertable `telemetry_events` (chunks de 7 dias, compressão colunar após 14 dias e retenção de 90 dias).
+- `02-init-aggregates.sql` (`init-aggregates.sql`): cria as agregações contínuas `telemetry_hourly` e `telemetry_daily` com políticas de refresh automático e retenção de 5 anos.
+- `03-init-relational.sql` (`init-relational.sql`): habilita `pgcrypto` e cria as 12 tabelas relacionais (conteúdo, eventos, quiz vocacional, usuários administrativos, dúvidas e check-ins) com seus índices e constraints.
 
-O PostgreSQL só executa scripts de inicialização quando o volume `db_data` está vazio. Como o script é idempotente, ele pode ser reaplicado em um banco já existente:
+O PostgreSQL só executa scripts de inicialização quando o volume `db_data` está vazio. Como os três scripts são idempotentes, eles podem ser reaplicados em ordem em um banco já existente:
 
 ```bash
 docker compose -f deployments/docker-compose.yml exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < deployments/docker/init-timescaledb.sql
+docker compose -f deployments/docker-compose.yml exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < deployments/docker/init-aggregates.sql
+docker compose -f deployments/docker-compose.yml exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < deployments/docker/init-relational.sql
 ```
 
 ### 2. Modos de Inicialização do Docker Compose
