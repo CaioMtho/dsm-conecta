@@ -16,7 +16,9 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./docker/init-timescaledb.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql:ro
+      - ./docker/init-timescaledb.sql:/docker-entrypoint-initdb.d/01-init-timescaledb.sql:ro
+      - ./docker/init-aggregates.sql:/docker-entrypoint-initdb.d/02-init-aggregates.sql:ro
+      - ./docker/init-relational.sql:/docker-entrypoint-initdb.d/03-init-relational.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-dsm_user} -d $${POSTGRES_DB:-dsm_conecta}"]
       interval: 10s
